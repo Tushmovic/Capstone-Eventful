@@ -1,0 +1,28 @@
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  roots: ['<rootDir>/test'],
+  testMatch: ['**/*.test.ts', '**/*.spec.ts'],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/**/*.interface.ts',
+    '!src/**/*.dto.ts',
+    '!src/index.ts',
+    '!src/server.ts',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'clover'],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@config/(.*)$': '<rootDir>/src/config/$1',
+    '^@controllers/(.*)$': '<rootDir>/src/controllers/$1',
+    '^@services/(.*)$': '<rootDir>/src/services/$1',
+    '^@models/(.*)$': '<rootDir>/src/models/$1',
+    '^@middlewares/(.*)$': '<rootDir>/src/middlewares/$1',
+    '^@utils/(.*)$': '<rootDir>/src/utils/$1',
+    '^@interfaces/(.*)$': '<rootDir>/src/interfaces/$1',
+    '^@dtos/(.*)$': '<rootDir>/src/dtos/$1',
+  },
+  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
+  globalTeardown: '<rootDir>/test/teardown.ts',
+};
