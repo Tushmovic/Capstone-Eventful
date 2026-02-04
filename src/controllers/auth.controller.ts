@@ -2,7 +2,13 @@ import { Request, Response } from 'express';
 import { authService } from '../services/auth.service';
 import { ApiResponse } from '../utils/response';
 import { validateRequest } from '../middlewares/validation.middleware';
-import { registerSchema, loginSchema, refreshTokenSchema, changePasswordSchema, updateProfileSchema } from '../dtos/auth.dto';
+import { 
+  registerSchema, 
+  loginSchema, 
+  refreshTokenSchema, 
+  changePasswordSchema, 
+  updateProfileSchema 
+} from '../dtos/auth.dto';
 import { logger } from '../utils/logger';
 
 export class AuthController {

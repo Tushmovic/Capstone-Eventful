@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from './auth.routes';
+import eventRoutes from './event.routes';
 
 const router = Router();
 
@@ -22,11 +23,11 @@ router.get('/health', (req, res) => {
 
 // API routes
 router.use('/auth', authRoutes);
+router.use('/events', eventRoutes);
 
 // Add these placeholders for now
-router.use('/events', (req, res) => res.status(200).json({ message: 'Events endpoint' }));
-router.use('/tickets', (req, res) => res.status(200).json({ message: 'Tickets endpoint' }));
-router.use('/payments', (req, res) => res.status(200).json({ message: 'Payments endpoint' }));
-router.use('/analytics', (req, res) => res.status(200).json({ message: 'Analytics endpoint' }));
+router.use('/tickets', (req, res) => res.status(200).json({ message: 'Tickets endpoint - Coming soon' }));
+router.use('/payments', (req, res) => res.status(200).json({ message: 'Payments endpoint - Coming soon' }));
+router.use('/analytics', (req, res) => res.status(200).json({ message: 'Analytics endpoint - Coming soon' }));
 
 export default router;

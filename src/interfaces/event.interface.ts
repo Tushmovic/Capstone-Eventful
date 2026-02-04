@@ -45,6 +45,11 @@ export interface IEvent extends Document {
   // Virtuals
   isSoldOut: boolean;
   daysUntilEvent: number;
+  
+  // Methods
+  incrementViews(): Promise<IEvent>;
+  incrementShares(): Promise<IEvent>;
+  updateTicketAvailability(ticketsSold: number): Promise<IEvent>;
 }
 
 export interface IEventInput {
@@ -109,6 +114,7 @@ export interface IEventUpdate {
   };
   ticketPrice?: number;
   totalTickets?: number;
+  availableTickets?: number; // ADDED THIS
   status?: 'draft' | 'published' | 'cancelled';
   visibility?: 'public' | 'private';
   reminders?: {
@@ -129,4 +135,8 @@ export interface IEventFilter {
   visibility?: string;
   search?: string;
   creator?: string;
+  page?: number; // ADDED THIS
+  limit?: number; // ADDED THIS
+  sortBy?: 'date' | 'price' | 'createdAt' | 'views'; // ADDED THIS
+  sortOrder?: 'asc' | 'desc'; // ADDED THIS
 }

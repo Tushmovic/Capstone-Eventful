@@ -7,7 +7,7 @@ import {
   refreshTokenSchema, 
   changePasswordSchema, 
   updateProfileSchema 
-} from '../dtos/auth.dto';
+} from '../dtos/auth.dto'; // This import should work now
 import { authenticated, creatorOnly, eventeeOnly } from '../middlewares/auth.middleware';
 import { authRateLimiter } from '../middlewares/rateLimit.middleware';
 

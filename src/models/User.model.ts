@@ -1,9 +1,14 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { IUser } from '../interfaces/user.interface';
 import { constants } from '../config/constants';
 
-const userSchema = new Schema<IUser>(
+// Define the User interface for the model
+interface IUserModel extends Model<IUser> {
+  findByEmail(email: string): Promise<IUser | null>;
+}
+
+const userSchema = new Schema<IUser, IUserModel>(
   {
     name: {
       type: String,
@@ -28,7 +33,7 @@ const userSchema = new Schema<IUser>(
     },
     role: {
       type: String,
-      enum: [constants.ROLES.CREATOR, constants.ROLES.EVENTEE, constants.ROLES.ADMIN],
+      enum: Object.values(constants.ROLES),
       default: constants.ROLES.EVENTEE,
       required: true,
     },
@@ -98,7 +103,7 @@ const userSchema = new Schema<IUser>(
   }
 );
 
-// Indexes
+// Indexes for better query performance
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 userSchema.index({ createdAt: -1 });
@@ -118,7 +123,11 @@ userSchema.pre('save', async function (next) {
 
 // Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
-  return await bcrypt.compare(candidatePassword, this.password);
+  try {
+    return await bcrypt.compare(candidatePassword, (this as IUser).password);
+  } catch (error) {
+    throw error;
+  }
 };
 
 // Static method to find user by email
@@ -128,9 +137,9 @@ userSchema.statics.findByEmail = function (email: string) {
 
 // Virtual for user's full profile URL
 userSchema.virtual('profileUrl').get(function () {
-  return `${process.env.API_BASE_URL}/api/v1/users/${this._id}/profile`;
+  return `${process.env.API_BASE_URL}/users/${this._id}/profile`;
 });
 
-const User = mongoose.model<IUser>('User', userSchema);
+const User = mongoose.model<IUser, IUserModel>('User', userSchema);
 
 export default User;
