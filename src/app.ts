@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
-import { stream } from './utils/logger';
+import { stream, logger } from './utils/logger'; // ADDED logger import
 import { errorMiddleware } from './middlewares/error.middleware';
 import { globalRateLimiter } from './middlewares/rateLimit.middleware';
 import routes from './routes';
@@ -29,11 +29,26 @@ class App {
   }
 
   private async initializeDatabase(): Promise<void> {
-    await connectDB();
+    try {
+      await connectDB();
+      logger.info('Database connected successfully');
+    } catch (error: any) {
+      logger.error(`Database connection failed: ${error.message}`);
+      throw error; // Database is critical, so we should fail
+    }
   }
 
   private async initializeRedis(): Promise<void> {
-    await redisClient.connect();
+    try {
+      await redisClient.connect();
+      // Test the connection
+      const pong = await redisClient.ping();
+      logger.info(`Redis connected successfully: ${pong}`);
+    } catch (error: any) {
+      logger.error(`Redis connection failed: ${error.message}`);
+      logger.warn('Application will run without Redis caching');
+      // Don't throw - Redis is not critical for basic functionality
+    }
   }
 
   private initializeMiddlewares(): void {
@@ -62,17 +77,41 @@ class App {
   }
 
   private initializeRoutes(): void {
-    // Health check endpoint
-    this.app.get('/health', (req: Request, res: Response) => {
-      res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
+// Health check endpoint
+this.app.get('/health', async (req: Request, res: Response) => {
+  try {
+    const redisStatus = redisClient.isReady() ? 'connected' : 'disconnected';
+    
+    // Test Redis connection if it says it's ready
+    let redisTest = 'unknown';
+    if (redisClient.isReady()) {
+      try {
+        const pong = await redisClient.ping();
+        redisTest = pong === 'PONG' ? 'healthy' : 'unhealthy';
+      } catch {
+        redisTest = 'unhealthy';
+      }
+    }
+    
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      services: {
         database: 'connected',
-        redis: redisClient.isReady() ? 'connected' : 'disconnected',
-      });
+        redis: redisStatus,
+        redis_test: redisTest,
+      },
+      environment: process.env.NODE_ENV || 'development',
     });
-
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: error.message,
+    });
+  }
+});
     // API routes
     this.app.use('/api/v1', routes);
 
@@ -101,11 +140,12 @@ class App {
 
   public listen(): void {
     this.app.listen(this.port, () => {
-      console.log(`
+      logger.info(`
         🚀 Server running on port ${this.port}
         📚 API Documentation: http://localhost:${this.port}/api-docs
         🔗 Health Check: http://localhost:${this.port}/health
         🌍 Environment: ${process.env.NODE_ENV || 'development'}
+        🗄️  Redis: ${redisClient.isReady() ? 'Connected ✅' : 'Disconnected ⚠️'}
       `);
     });
   }

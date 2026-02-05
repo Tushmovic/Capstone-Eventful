@@ -27,6 +27,7 @@
     "morgan": "^1.10.1",
     "multer": "1.4.5-lts.1",
     "node-schedule": "2.1.1",
+    "nodemailer": "^8.0.0",
     "paystack": "^2.0.1",
     "qrcode": "^1.5.3",
     "rate-limit-redis": "4.3.1",
