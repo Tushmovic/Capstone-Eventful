@@ -23,9 +23,9 @@ export class EmailService {
     });
 
     // Verify connection configuration
-    this.transporter.verify((error) => {
+    this.transporter.verify((error: Error | null) => { // ADDED TYPE ANNOTATION
       if (error) {
-        logger.error(`SMTP connection error: ${error}`);
+        logger.error(`SMTP connection error: ${error.message}`); // CHANGED error to error.message
       } else {
         logger.info('SMTP server is ready to send emails');
       }

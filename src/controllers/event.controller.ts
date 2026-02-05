@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose'; // ADDED THIS IMPORT
 import { eventService } from '../services/event.service';
 import { ApiResponse } from '../utils/response';
 import { validateRequest, validateQuery } from '../middlewares/validation.middleware';
@@ -258,13 +259,24 @@ export class EventController {
 
   async getEventCategories(req: Request, res: Response) {
     try {
-      // Use mongoose model's distinct method
-      const categories = await Event.distinct('category');
+      // Use mongoose connection to access raw MongoDB collection
+      const db = mongoose.connection.db;
+      if (!db) {
+        throw new Error('Database not connected');
+      }
+
+      const eventsCollection = db.collection('events');
+      
+      // Use MongoDB native methods
+      const categories = await eventsCollection.distinct('category', {
+        status: 'published',
+        visibility: 'public'
+      });
       
       // Get count for each category
       const categoriesWithCount = await Promise.all(
         categories.map(async (category: string) => {
-          const count = await Event.countDocuments({ 
+          const count = await eventsCollection.countDocuments({ 
             category, 
             status: 'published', 
             visibility: 'public' 
