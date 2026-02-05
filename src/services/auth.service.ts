@@ -2,9 +2,7 @@ import User from '../models/User.model';
 import { IUser, IUserInput, ILoginInput, IAuthResponse } from '../interfaces/user.interface';
 import jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger';
-import { ApiResponse } from '../utils/response';
 import { constants } from '../config/constants';
-
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -26,12 +24,11 @@ export class AuthService {
       // Generate tokens
       const { token, refreshToken } = this.generateTokens(user._id.toString(), user.role);
 
-      // Store refresh token (we'll implement Redis later)
-      // For now, just return it
-
       return {
+        success: true,
+        message: 'Registration successful',
         user: {
-          _id: user._id.toString(),
+          _id: user._id.toString(),  // Convert ObjectId to string
           name: user.name,
           email: user.email,
           role: user.role,
@@ -73,8 +70,10 @@ export class AuthService {
       const { token, refreshToken } = this.generateTokens(user._id.toString(), user.role);
 
       return {
+        success: true,
+        message: 'Login successful',
         user: {
-          _id: user._id.toString(),
+          _id: user._id.toString(),  // Convert ObjectId to string
           name: user.name,
           email: user.email,
           role: user.role,
@@ -198,7 +197,7 @@ export class AuthService {
     }
   }
 
-  async refreshToken(refreshToken: string): Promise<{ token: string; refreshToken: string }> {
+  async refreshToken(refreshToken: string): Promise<IAuthResponse> {
     try {
       const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET) as {
         userId: string;
@@ -212,7 +211,21 @@ export class AuthService {
       }
 
       // Generate new tokens
-      return this.generateTokens(user._id.toString(), user.role);
+      const { token, refreshToken: newRefreshToken } = this.generateTokens(user._id.toString(), user.role);
+
+      return {
+        success: true,
+        message: 'Token refreshed successfully',
+        user: {
+          _id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          profileImage: user.profileImage,
+        },
+        token,
+        refreshToken: newRefreshToken,
+      };
     } catch (error: any) {
       logger.error(`Refresh token error: ${error.message}`);
       throw new Error('Invalid refresh token');

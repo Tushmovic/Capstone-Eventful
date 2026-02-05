@@ -1,66 +1,45 @@
-import { IsString, IsNumber, IsOptional, IsEnum, IsMongoId, Min } from 'class-validator';
+// src/dtos/payment.dto.ts
+import Joi from 'joi';
 
-export class InitializePaymentDto {
-  @IsString()
-  email: string;
+export const initializePaymentSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.email': 'Valid email is required',
+    'string.empty': 'Email is required',
+    'any.required': 'Email is required',
+  }),
+  amount: Joi.number().min(100).required().messages({
+    'number.base': 'Amount must be a number',
+    'number.min': 'Amount must be at least ₦1 (100 kobo)',
+    'any.required': 'Amount is required',
+  }),
+  metadata: Joi.object().optional(),
+});
 
-  @IsNumber()
-  @Min(100) // Minimum 1 Naira (100 kobo)
-  amount: number;
+export const verifyPaymentSchema = Joi.object({
+  reference: Joi.string().required().messages({
+    'string.base': 'Reference must be a string',
+    'string.empty': 'Reference is required',
+    'any.required': 'Reference is required',
+  }),
+});
 
-  @IsOptional()
-  metadata?: any;
-}
+export const paymentWebhookSchema = Joi.object({
+  event: Joi.string().required().messages({
+    'string.base': 'Event type must be a string',
+    'string.empty': 'Event type is required',
+    'any.required': 'Event type is required',
+  }),
+  data: Joi.object({
+    reference: Joi.string().required(),
+    status: Joi.string().required(),
+    amount: Joi.number().required(),
+    metadata: Joi.object().optional(),
+  }).required(),
+});
 
-export class VerifyPaymentDto {
-  @IsString()
-  reference: string;
-}
-
-export class PaymentWebhookDto {
-  @IsString()
-  event: string;
-
-  data: {
-    reference: string;
-    status: string;
-    amount: number;
-    gateway_response: string;
-    paid_at: string;
-    created_at: string;
-    currency: string;
-    channel: string;
-    metadata: any;
-    customer: {
-      email: string;
-    };
-  };
-}
-
-export class PaymentResponseDto {
-  _id: string;
-  reference: string;
-  userId: any;
-  eventId: any;
-  ticketId: any;
-  amount: number;
-  currency: string;
-  status: string;
-  paymentMethod: string;
-  createdAt: Date;
-  updatedAt: Date;
-
-  constructor(payment: any) {
-    this._id = payment._id;
-    this.reference = payment.reference;
-    this.userId = payment.userId;
-    this.eventId = payment.eventId;
-    this.ticketId = payment.ticketId;
-    this.amount = payment.amount;
-    this.currency = payment.currency;
-    this.status = payment.status;
-    this.paymentMethod = payment.paymentMethod;
-    this.createdAt = payment.createdAt;
-    this.updatedAt = payment.updatedAt;
-  }
-}
+export const paymentFilterSchema = Joi.object({
+  status: Joi.string().valid('pending', 'successful', 'failed').optional(),
+  eventId: Joi.string().optional(),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(50).default(10),
+});
