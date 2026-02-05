@@ -10,6 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@types/uuid": "^10.0.0",
     "axios": "^1.13.4",
     "bcryptjs": "2.4.3",
     "compression": "^1.8.1",
@@ -25,12 +26,14 @@
     "morgan": "^1.10.1",
     "multer": "1.4.5-lts.1",
     "node-schedule": "2.1.1",
-    "qrcode": "1.5.3",
+    "paystack": "^2.0.1",
+    "qrcode": "^1.5.3",
     "rate-limit-redis": "4.3.1",
     "redis": "4.6.10",
     "socket.io": "^4.8.3",
     "swagger-jsdoc": "6.2.8",
     "swagger-ui-express": "5.0.0",
+    "uuid": "^13.0.0",
     "winston": "3.11.0"
   },
   "devDependencies": {
@@ -45,7 +48,7 @@
     "@types/node": "20.10.5",
     "@types/node-schedule": "2.1.0",
     "@types/nodemailer": "^7.0.9",
-    "@types/qrcode": "1.5.3",
+    "@types/qrcode": "^1.5.3",
     "@types/supertest": "2.0.16",
     "@types/swagger-jsdoc": "6.0.4",
     "@types/swagger-ui-express": "4.1.6",

@@ -1,61 +1,38 @@
-import { Document } from 'mongoose';
+import { Request } from 'express';
+import { Document, Types } from 'mongoose';
 
 export interface IUser extends Document {
-  _id: string;
+  _id: Types.ObjectId;
   name: string;
   email: string;
   password: string;
-  role: 'creator' | 'eventee' | 'admin';
   profileImage?: string;
+  role: 'user' | 'creator' | 'admin';
+  eventsCreated: Types.ObjectId[];
+  ticketsBought: Types.ObjectId[];
+  notifications: Types.ObjectId[];
   isEmailVerified: boolean;
-  phoneNumber?: string;
-  bio?: string;
-  website?: string;
-  socialMedia?: {
-    twitter?: string;
-    facebook?: string;
-    instagram?: string;
-    linkedin?: string;
-  };
-  eventsCreated: string[];
-  ticketsBought: string[];
-  notificationPreferences: {
-    email: boolean;
-    sms: boolean;
-    push: boolean;
-  };
-  createdAt: Date;
-  updatedAt: Date;
-  
-  // Methods
   comparePassword(candidatePassword: string): Promise<boolean>;
+  generateAuthToken(): string;
 }
 
-export interface IUserInput {
+// ADD THIS INTERFACE - DON'T REMOVE EXISTING CODE
+export interface AuthRequest extends Request {
+  user?: {
+    userId: string;
+    [key: string]: any;
+  };
+  token?: string;
+}
+
+export interface IUserLogin {
+  email: string;
+  password: string;
+}
+
+export interface IUserRegister {
   name: string;
   email: string;
   password: string;
-  role: 'creator' | 'eventee' | 'admin';
-  phoneNumber?: string;
-  profileImage?: string;
+  role?: 'user' | 'creator';
 }
-
-export interface ILoginInput {
-  email: string;
-  password: string;
-}
-
-export interface IAuthResponse {
-  user: {
-    _id: string;
-    name: string;
-    email: string;
-    role: string;
-    profileImage?: string;
-  };
-  token: string;
-  refreshToken: string;
-}
-
-// Export as default for easier imports
-export default IUser;
