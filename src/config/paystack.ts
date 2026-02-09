@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { logger } from '../utils/logger';
+import { IPaystackInitializeResponse, IPaystackVerifyResponse } from '../interfaces/payment.interface';
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
 const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY || '';
@@ -16,9 +17,13 @@ export class PaystackService {
     amount: number,
     reference: string,
     metadata?: Record<string, any>
-  ): Promise<any> {
+  ): Promise<{ 
+    authorization_url: string; 
+    access_code: string; 
+    reference: string;
+  }> {
     try {
-      const response = await axios.post(
+      const response = await axios.post<IPaystackInitializeResponse>(
         `${PAYSTACK_BASE_URL}/transaction/initialize`,
         {
           email,
@@ -30,7 +35,15 @@ export class PaystackService {
         { headers: this.headers }
       );
 
-      return response.data;
+      if (!response.data.status) {
+        throw new Error(response.data.message || 'Failed to initialize payment');
+      }
+
+      return {
+        authorization_url: response.data.data.authorization_url,
+        access_code: response.data.data.access_code,
+        reference: response.data.data.reference,
+      };
     } catch (error: any) {
       logger.error(`Paystack initialize transaction error: ${error.message}`);
       throw new Error('Failed to initialize payment');
@@ -39,12 +52,12 @@ export class PaystackService {
 
   async verifyTransaction(reference: string): Promise<any> {
     try {
-      const response = await axios.get(
+      const response = await axios.get<IPaystackVerifyResponse>(
         `${PAYSTACK_BASE_URL}/transaction/verify/${reference}`,
         { headers: this.headers }
       );
 
-      return response.data;
+      return response.data.data;
     } catch (error: any) {
       logger.error(`Paystack verify transaction error: ${error.message}`);
       throw new Error('Failed to verify payment');

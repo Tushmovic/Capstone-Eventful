@@ -2,7 +2,8 @@ import { Router } from 'express';
 import authRoutes from './auth.routes';
 import eventRoutes from './event.routes';
 import ticketRoutes from './ticket.routes';
-import paymentRoutes from './payment.routes'; // ADD THIS LINE
+import paymentRoutes from './payment.routes';
+import analyticsRoutes from './analytics.routes'; // Add this
 
 const router = Router();
 
@@ -20,7 +21,8 @@ router.get('/health', (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/events', eventRoutes);
 router.use('/tickets', ticketRoutes);
-router.use('/payments', paymentRoutes); // ADD THIS LINE
+router.use('/payments', paymentRoutes);
+router.use('/analytics', analyticsRoutes); // Add this
 
 // 404 handler for undefined routes
 router.use('*', (req, res) => {
