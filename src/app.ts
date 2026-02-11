@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
-import { stream, logger } from './utils/logger'; // ADDED logger import
+import { stream, logger } from './utils/logger';
 import { errorMiddleware } from './middlewares/error.middleware';
 import { globalRateLimiter } from './middlewares/rateLimit.middleware';
 import routes from './routes';
@@ -20,34 +20,53 @@ class App {
     this.app = express();
     this.port = port;
 
-    this.initializeDatabase();
-    this.initializeRedis();
+    // Initialize in correct order - SWAGGER MUST COME BEFORE ROUTES
     this.initializeMiddlewares();
-    this.initializeRoutes();
+    this.initializeSwagger();     // ✅ MOVED UP - before routes and 404 handler
+    this.initializeRoutes();      // ⬅️ Routes after Swagger
     this.initializeErrorHandling();
-    this.initializeSwagger();
+    
+    // Start async initializations
+    this.startServices();
+  }
+
+  private async startServices(): Promise<void> {
+    try {
+      await this.initializeDatabase();
+    } catch (error) {
+      logger.error('Failed to connect to database. Exiting...');
+      process.exit(1);
+    }
+
+    try {
+      await this.initializeRedis();
+    } catch (error) {
+      logger.warn('Redis connection failed - continuing without cache');
+    }
+
+    this.startServer();
   }
 
   private async initializeDatabase(): Promise<void> {
-    try {
-      await connectDB();
-      logger.info('Database connected successfully');
-    } catch (error: any) {
-      logger.error(`Database connection failed: ${error.message}`);
-      throw error; // Database is critical, so we should fail
-    }
+    await connectDB();
+    logger.info('✅ Database connected successfully');
   }
 
   private async initializeRedis(): Promise<void> {
+    logger.info('🔗 Connecting to Redis Cloud...');
+    
     try {
-      await redisClient.connect();
-      // Test the connection
-      const pong = await redisClient.ping();
-      logger.info(`Redis connected successfully: ${pong}`);
+      const connected = await redisClient.connect();
+      
+      if (connected) {
+        const pong = await redisClient.ping();
+        logger.info(`✅ Redis Cloud connected: ${pong}`);
+      } else {
+        logger.warn('⚠️ Redis Cloud connection failed');
+      }
     } catch (error: any) {
-      logger.error(`Redis connection failed: ${error.message}`);
-      logger.warn('Application will run without Redis caching');
-      // Don't throw - Redis is not critical for basic functionality
+      logger.warn(`⚠️ Redis error: ${error.message}`);
+      // Don't throw - app continues without Redis
     }
   }
 
@@ -66,8 +85,10 @@ class App {
     // Compression
     this.app.use(compression());
 
-    // Rate limiting
-    this.app.use(globalRateLimiter);
+    // Rate limiting - only if Redis is ready
+    if (redisClient.isReady()) {
+      this.app.use(globalRateLimiter);
+    }
 
     // Logging
     this.app.use(morgan('combined', { stream }));
@@ -76,78 +97,118 @@ class App {
     this.app.use('/uploads', express.static('uploads'));
   }
 
-  private initializeRoutes(): void {
-// Health check endpoint
-this.app.get('/health', async (req: Request, res: Response) => {
-  try {
-    const redisStatus = redisClient.isReady() ? 'connected' : 'disconnected';
-    
-    // Test Redis connection if it says it's ready
-    let redisTest = 'unknown';
-    if (redisClient.isReady()) {
-      try {
-        const pong = await redisClient.ping();
-        redisTest = pong === 'PONG' ? 'healthy' : 'unhealthy';
-      } catch {
-        redisTest = 'unhealthy';
-      }
-    }
-    
-    res.status(200).json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      services: {
-        database: 'connected',
-        redis: redisStatus,
-        redis_test: redisTest,
-      },
-      environment: process.env.NODE_ENV || 'development',
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: error.message,
-    });
-  }
-});
-    // API routes
-    this.app.use('/api/v1', routes);
-
-    // 404 handler
-    this.app.use('*', (req: Request, res: Response) => {
-      res.status(404).json({
-        success: false,
-        message: `Route ${req.originalUrl} not found`,
-      });
-    });
-  }
-
   private initializeSwagger(): void {
     if (process.env.NODE_ENV !== 'production') {
-      this.app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-      this.app.get('/api-docs.json', (req, res) => {
+      // Serve swagger docs
+      this.app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+      
+      // Serve swagger spec as JSON
+      this.app.get('/docs.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.send(swaggerSpec);
       });
+      
+      logger.info(`📚 Swagger docs available at: http://localhost:${this.port}/docs`);
+      logger.info(`📋 Swagger JSON at: http://localhost:${this.port}/docs.json`);
     }
+  }
+
+  private initializeRoutes(): void {
+    // Health check endpoint
+    this.app.get('/health', async (req: Request, res: Response) => {
+      const healthStatus: any = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        services: {
+          database: 'connected',
+          redis: redisClient.isReady() ? 'connected' : 'disconnected',
+        },
+        environment: process.env.NODE_ENV || 'development',
+      };
+
+      // Add Redis ping test if connected
+      if (redisClient.isReady()) {
+        try {
+          const pong = await redisClient.ping();
+          healthStatus.services.redis_ping = pong;
+          healthStatus.services.redis_test = 'healthy';
+        } catch (error: any) {
+          healthStatus.services.redis_test = `error: ${error.message}`;
+        }
+      }
+
+      res.status(200).json(healthStatus);
+    });
+
+    // API routes
+    this.app.use('/api/v1', routes);
+
+    // 404 handler - THIS MUST BE LAST!
+    this.app.use('*', (req: Request, res: Response) => {
+      res.status(404).json({
+        success: false,
+        message: `Route ${req.originalUrl} not found`
+      });
+    });
   }
 
   private initializeErrorHandling(): void {
     this.app.use(errorMiddleware);
   }
 
-  public listen(): void {
-    this.app.listen(this.port, () => {
+  private startServer(): void {
+    const server = this.app.listen(this.port, () => {
       logger.info(`
         🚀 Server running on port ${this.port}
-        📚 API Documentation: http://localhost:${this.port}/api-docs
+        📚 API Documentation: http://localhost:${this.port}/docs
         🔗 Health Check: http://localhost:${this.port}/health
         🌍 Environment: ${process.env.NODE_ENV || 'development'}
         🗄️  Redis: ${redisClient.isReady() ? 'Connected ✅' : 'Disconnected ⚠️'}
+        📊 Database: Connected ✅
       `);
     });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => this.gracefulShutdown(server));
+    process.on('SIGINT', () => this.gracefulShutdown(server));
+    
+    // Handle uncaught errors
+    process.on('uncaughtException', (error: Error) => {
+      logger.error(`❌ Uncaught Exception: ${error.message}`);
+      logger.error(error.stack || '');
+    });
+
+    process.on('unhandledRejection', (reason: any) => {
+      logger.error(`❌ Unhandled Rejection: ${reason}`);
+    });
+  }
+
+  private async gracefulShutdown(server: any): Promise<void> {
+    logger.info('👋 Received shutdown signal, closing server...');
+    
+    server.close(async () => {
+      logger.info('✅ HTTP server closed');
+      
+      try {
+        await redisClient.disconnect();
+        logger.info('✅ Redis connection closed');
+      } catch (error: any) {
+        logger.warn(`⚠️ Error closing Redis: ${error.message}`);
+      }
+      
+      process.exit(0);
+    });
+
+    // Force shutdown after 10 seconds
+    setTimeout(() => {
+      logger.error('❌ Could not close connections in time, forcefully shutting down');
+      process.exit(1);
+    }, 10000);
+  }
+
+  public listen(): void {
+    logger.info('✅ App is initialized and ready');
   }
 }
 

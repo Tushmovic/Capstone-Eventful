@@ -5,10 +5,11 @@ import { logger } from '../utils/logger';
 const REDIS_URL = process.env.REDIS_URL || 'redis://default:XGaFFHOaY0cDPg6S5lNyDV2jz4jfbnAI@redis-18506.c341.af-south-1-1.ec2.cloud.redislabs.com:18506';
 
 class RedisClient {
-  private client: any;
+  public client: any;
   private isConnected = false;
   private connectionAttempts = 0;
   private maxAttempts = 3;
+  private isConnecting = false;
 
   constructor() {
     this.initializeRedisClient();
@@ -16,95 +17,95 @@ class RedisClient {
 
   private initializeRedisClient(): void {
     try {
-      // Check if URL contains 'rediss://' for SSL/TLS (Redis Cloud usually uses SSL)
-      const useTLS = REDIS_URL.startsWith('rediss://') || REDIS_URL.includes('cloud.redislabs.com');
-      
-      // If URL doesn't start with redis:// or rediss://, prepend it
+      // Check if URL contains 'rediss://' for SSL/TLS
       let formattedUrl = REDIS_URL;
+      
+      // Ensure URL has proper protocol
       if (!formattedUrl.startsWith('redis://') && !formattedUrl.startsWith('rediss://')) {
-        formattedUrl = `rediss://${formattedUrl}`; // Use rediss for SSL
+        // Check if it looks like a Redis Cloud URL
+        if (formattedUrl.includes('cloud.redislabs.com')) {
+          formattedUrl = `rediss://${formattedUrl}`;
+        } else {
+          formattedUrl = `redis://${formattedUrl}`;
+        }
       }
 
-      logger.info(`Initializing Redis client for Cloud Redis: ${formattedUrl.replace(/\/\/[^:]+:[^@]+@/, '//*****:*****@')}`);
+      logger.info(`Initializing Redis client: ${formattedUrl.replace(/\/\/[^:]+:[^@]+@/, '//*****:*****@')}`);
 
       this.client = createClient({
         url: formattedUrl,
         socket: {
-          connectTimeout: 15000, // 15 seconds for cloud
-          tls: useTLS,
-          rejectUnauthorized: false, // Allow self-signed certificates
+          connectTimeout: 10000, // 10 seconds
+          tls: formattedUrl.startsWith('rediss://'),
+          rejectUnauthorized: false,
           reconnectStrategy: (retries: number) => {
-            if (retries > this.maxAttempts) {
-              logger.error(`Redis Cloud connection failed after ${this.maxAttempts} attempts`);
+            if (retries > 3) {
+              logger.warn('Max Redis reconnection retries reached');
               return false;
             }
-            const delay = Math.min(retries * 500, 5000);
-            logger.warn(`Redis Cloud reconnection attempt ${retries}, retrying in ${delay}ms`);
-            return delay;
+            return Math.min(retries * 100, 3000);
           }
         }
       });
 
       this.setupEventListeners();
     } catch (error: any) {
-      logger.error(`Failed to initialize Redis Cloud client: ${error.message}`);
+      logger.error(`Failed to initialize Redis client: ${error.message}`);
+      this.client = null;
     }
   }
 
   private setupEventListeners(): void {
+    if (!this.client) return;
+
     this.client.on('connect', () => {
       this.isConnected = true;
+      this.isConnecting = false;
       this.connectionAttempts = 0;
-      logger.info('✅ Redis Cloud client connected');
+      logger.info('✅ Redis connected');
     });
 
     this.client.on('ready', () => {
-      logger.info('✅ Redis Cloud client ready');
+      logger.info('✅ Redis ready');
     });
 
     this.client.on('error', (error: Error) => {
       this.isConnected = false;
-      logger.error(`❌ Redis Cloud client error: ${error.message}`);
+      logger.error(`❌ Redis error: ${error.message}`);
     });
 
     this.client.on('end', () => {
       this.isConnected = false;
-      logger.warn('Redis Cloud client disconnected');
-    });
-
-    this.client.on('reconnecting', () => {
-      logger.info('Redis Cloud client reconnecting...');
+      logger.warn('Redis disconnected');
     });
   }
 
   async connect(): Promise<boolean> {
-    if (this.isConnected) {
-      return true;
-    }
+    if (this.isConnected) return true;
+    if (this.isConnecting) return false;
+    if (!this.client) return false;
 
     try {
+      this.isConnecting = true;
       this.connectionAttempts++;
-      logger.info(`Connecting to Redis Cloud (attempt ${this.connectionAttempts}/${this.maxAttempts})...`);
+      
+      logger.info(`Connecting to Redis (attempt ${this.connectionAttempts}/${this.maxAttempts})...`);
       
       await this.client.connect();
       this.isConnected = true;
+      this.isConnecting = false;
       
-      // Test the connection
+      // Test connection
       const pong = await this.client.ping();
-      logger.info(`✅ Redis Cloud connection successful: ${pong}`);
+      logger.info(`✅ Redis connection successful: ${pong}`);
       
       return true;
     } catch (error: any) {
       this.isConnected = false;
-      logger.error(`❌ Redis Cloud connection failed: ${error.message}`);
+      this.isConnecting = false;
+      logger.error(`❌ Redis connection failed: ${error.message}`);
       
-      if (this.connectionAttempts < this.maxAttempts) {
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        return this.connect();
-      }
-      
-      logger.error('Max connection attempts reached for Redis Cloud');
+      // Don't retry automatically - let the app start without Redis
       return false;
     }
   }
@@ -114,13 +115,13 @@ class RedisClient {
       if (!this.isConnected) {
         const connected = await this.connect();
         if (!connected) {
-          throw new Error('Redis Cloud not connected');
+          return 'NOT_CONNECTED';
         }
       }
       return await this.client.ping();
     } catch (error: any) {
-      logger.error(`Redis Cloud ping failed: ${error.message}`);
-      throw error;
+      logger.warn(`Redis ping failed: ${error.message}`);
+      return 'ERROR';
     }
   }
 
@@ -135,7 +136,7 @@ class RedisClient {
       const value = await this.client.get(key);
       return value ? JSON.parse(value) : null;
     } catch (error: any) {
-      logger.error(`Redis Cloud get error for key "${key}": ${error.message}`);
+      logger.warn(`Redis get failed for key "${key}": ${error.message}`);
       return null;
     }
   }
@@ -156,7 +157,7 @@ class RedisClient {
       }
       return true;
     } catch (error: any) {
-      logger.error(`Redis Cloud set error for key "${key}": ${error.message}`);
+      logger.warn(`Redis set failed for key "${key}": ${error.message}`);
       return false;
     }
   }
@@ -172,7 +173,7 @@ class RedisClient {
       await this.client.del(key);
       return true;
     } catch (error: any) {
-      logger.error(`Redis Cloud delete error for key "${key}": ${error.message}`);
+      logger.warn(`Redis delete failed for key "${key}": ${error.message}`);
       return false;
     }
   }
@@ -188,20 +189,20 @@ class RedisClient {
       await this.client.flushAll();
       return true;
     } catch (error: any) {
-      logger.error(`Redis Cloud flushAll error: ${error.message}`);
+      logger.warn(`Redis flushAll failed: ${error.message}`);
       return false;
     }
   }
 
   async disconnect(): Promise<void> {
     try {
-      if (this.isConnected) {
+      if (this.isConnected && this.client) {
         await this.client.quit();
         this.isConnected = false;
-        logger.info('Redis Cloud client disconnected');
+        logger.info('Redis disconnected');
       }
     } catch (error: any) {
-      logger.error(`Redis Cloud disconnect error: ${error.message}`);
+      logger.warn(`Redis disconnect error: ${error.message}`);
     }
   }
 

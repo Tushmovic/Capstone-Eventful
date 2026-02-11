@@ -3,7 +3,8 @@ import authRoutes from './auth.routes';
 import eventRoutes from './event.routes';
 import ticketRoutes from './ticket.routes';
 import paymentRoutes from './payment.routes';
-import analyticsRoutes from './analytics.routes'; // Add this
+import analyticsRoutes from './analytics.routes';
+import notificationRoutes from './notification.routes'; // ADD THIS
 
 const router = Router();
 
@@ -22,14 +23,7 @@ router.use('/auth', authRoutes);
 router.use('/events', eventRoutes);
 router.use('/tickets', ticketRoutes);
 router.use('/payments', paymentRoutes);
-router.use('/analytics', analyticsRoutes); // Add this
-
-// 404 handler for undefined routes
-router.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route ${req.originalUrl} not found`
-  });
-});
+router.use('/analytics', analyticsRoutes);
+router.use('/notifications', notificationRoutes); // ADD THIS
 
 export default router;
