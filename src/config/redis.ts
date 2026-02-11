@@ -17,17 +17,18 @@ class RedisClient {
 
   private initializeRedisClient(): void {
     try {
-      // Check if URL contains 'rediss://' for SSL/TLS
+      // FIX: Force non-SSL connection for Redis Cloud
       let formattedUrl = REDIS_URL;
       
+      // CRITICAL FIX: If it's rediss://, change to redis:// (disable SSL)
+      if (formattedUrl.startsWith('rediss://')) {
+        formattedUrl = formattedUrl.replace('rediss://', 'redis://');
+        logger.warn('⚠️ Converted rediss:// to redis:// (SSL disabled for Redis Cloud)');
+      }
+      
       // Ensure URL has proper protocol
-      if (!formattedUrl.startsWith('redis://') && !formattedUrl.startsWith('rediss://')) {
-        // Check if it looks like a Redis Cloud URL
-        if (formattedUrl.includes('cloud.redislabs.com')) {
-          formattedUrl = `rediss://${formattedUrl}`;
-        } else {
-          formattedUrl = `redis://${formattedUrl}`;
-        }
+      if (!formattedUrl.startsWith('redis://')) {
+        formattedUrl = `redis://${formattedUrl}`;
       }
 
       logger.info(`Initializing Redis client: ${formattedUrl.replace(/\/\/[^:]+:[^@]+@/, '//*****:*****@')}`);
@@ -35,9 +36,8 @@ class RedisClient {
       this.client = createClient({
         url: formattedUrl,
         socket: {
-          connectTimeout: 10000, // 10 seconds
-          tls: formattedUrl.startsWith('rediss://'),
-          rejectUnauthorized: false,
+          connectTimeout: 10000,
+          tls: false, // Explicitly disable TLS/SSL
           reconnectStrategy: (retries: number) => {
             if (retries > 3) {
               logger.warn('Max Redis reconnection retries reached');
@@ -105,7 +105,6 @@ class RedisClient {
       this.isConnecting = false;
       logger.error(`❌ Redis connection failed: ${error.message}`);
       
-      // Don't retry automatically - let the app start without Redis
       return false;
     }
   }

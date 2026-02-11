@@ -1,9 +1,10 @@
-import App from './app';
-import { logger } from './utils/logger';
-
-// Load environment variables
+// ⚠️ DOTENV MUST BE THE VERY FIRST IMPORT AND CONFIG - BEFORE ANYTHING ELSE
 import dotenv from 'dotenv';
 dotenv.config();
+
+// Now import everything else AFTER dotenv loads
+import App from './app';
+import { logger } from './utils/logger';
 
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
