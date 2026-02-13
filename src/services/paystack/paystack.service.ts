@@ -27,7 +27,8 @@ export class PaystackService {
           amount: amount * 100, // Convert to kobo
           reference,
           metadata,
-          callback_url: `${process.env.API_BASE_URL}/api/v1/payments/verify`,
+          // 🔥 FIX: Remove hardcoded backend URL - let Paystack use dashboard setting
+          // callback_url: `${process.env.API_BASE_URL}/api/v1/payments/verify`,
         },
         { headers: this.headers }
       );
