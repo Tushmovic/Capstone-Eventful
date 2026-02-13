@@ -7,8 +7,10 @@ import User from '../models/User.model';
 export class EventService {
   async createEvent(eventData: IEventInput, creatorId: string): Promise<IEvent> {
     try {
+      // Convert price from Naira to kobo for storage
       const event = new Event({
         ...eventData,
+        ticketPrice: eventData.ticketPrice * 100, // Convert to kobo
         creator: creatorId,
         availableTickets: eventData.totalTickets,
       });
@@ -158,19 +160,13 @@ export class EventService {
         query.$text = { $search: filter.search };
       }
 
-      // Sort
-      const sort: any = {};
-      const sortBy = filter.sortBy || 'date';
-      const sortOrder = filter.sortOrder === 'desc' ? -1 : 1;
-      sort[sortBy] = sortOrder;
-
-      // Execute query with pagination
+      // Execute query with pagination - NO CACHING for faster display
       const skip = (page - 1) * limit;
       
       const [events, total] = await Promise.all([
         Event.find(query)
           .populate('creator', 'name email profileImage')
-          .sort(sort)
+          .sort({ createdAt: -1 }) // Show newest first
           .skip(skip)
           .limit(limit)
           .lean(),
@@ -280,7 +276,7 @@ export class EventService {
     }
   }
 
-  async getEventShareUrl(eventId: string): Promise<any | null> { // Changed return type from string to any
+  async getEventShareUrl(eventId: string): Promise<any | null> {
     try {
       const event = await Event.findById(eventId).lean();
       
@@ -291,7 +287,6 @@ export class EventService {
       const baseUrl = process.env.FRONTEND_URL || process.env.API_BASE_URL || 'http://localhost:3000';
       const shareUrl = `${baseUrl}/events/${eventId}`;
       
-      // Generate social media sharing URLs
       const encodedUrl = encodeURIComponent(shareUrl);
       const encodedTitle = encodeURIComponent(event.title);
       const encodedDescription = encodeURIComponent(event.description.substring(0, 100));
