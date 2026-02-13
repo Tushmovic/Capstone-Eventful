@@ -38,7 +38,10 @@ export class TicketService {
 
       const totalAmount = event.ticketPrice * quantity;
 
-      // 🔥 FIX: Let Paystack generate the reference - don't create your own
+      // 🔥 Generate a truly unique reference to avoid Paystack cache
+      const uniqueReference = `EVT_${Date.now()}_${userId.substring(0,5)}_${Math.random().toString(36).substring(2, 8)}`;
+
+      // Initialize payment with Paystack - reference passed INSIDE metadata
       const paymentData = await paystackService.initializeTransaction(
         user.email,
         totalAmount,
@@ -50,6 +53,8 @@ export class TicketService {
           quantity,
           ticketPrice: event.ticketPrice,
           totalAmount,
+          uniqueReference,
+          reference: uniqueReference, // Reference inside metadata
         }
       );
 
@@ -63,10 +68,12 @@ export class TicketService {
         totalAmount,
         status: 'pending',
         createdAt: new Date().toISOString(),
+        uniqueReference,
       });
 
       await redisClient.set(`payment:${paystackReference}`, redisValue);
       logger.info(`✅ Payment intent stored in Redis: ${paystackReference}`);
+      logger.info(`✅ Unique reference generated: ${uniqueReference}`);
 
       logger.info(`✅ Payment initialized for event ${eventId} by user ${userId}, ref: ${paystackReference}`);
       
@@ -80,8 +87,6 @@ export class TicketService {
       throw error;
     }
   }
-
-  // ============= REST OF METHODS (EXACTLY THE SAME) =============
 
   async verifyPayment(reference: string): Promise<{ 
     success: boolean; 
