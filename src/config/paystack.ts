@@ -27,7 +27,7 @@ export class PaystackService {
         email,
         amount: amount * 100,
         metadata,
-        callback_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/callback`,
+        // 🚨 CALLBACK_URL COMPLETELY REMOVED - Paystack will use dashboard setting
       };
 
       if (reference) {
