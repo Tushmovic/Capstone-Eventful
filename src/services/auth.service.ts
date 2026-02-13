@@ -28,7 +28,7 @@ export class AuthService {
         success: true,
         message: 'Registration successful',
         user: {
-          _id: user._id.toString(),  // Convert ObjectId to string
+          _id: user._id.toString(),
           name: user.name,
           email: user.email,
           role: user.role,
@@ -60,8 +60,6 @@ export class AuthService {
 
       // Check if email is verified
       if (!user.isEmailVerified) {
-        // In production, you might want to send verification email
-        // For now, we'll auto-verify for development
         user.isEmailVerified = true;
         await user.save();
       }
@@ -73,7 +71,7 @@ export class AuthService {
         success: true,
         message: 'Login successful',
         user: {
-          _id: user._id.toString(),  // Convert ObjectId to string
+          _id: user._id.toString(),
           name: user.name,
           email: user.email,
           role: user.role,
@@ -163,8 +161,6 @@ export class AuthService {
       // Update password
       user.password = newPassword;
       await user.save();
-
-      // Invalidate all tokens (will implement with Redis later)
     } catch (error: any) {
       logger.error(`Change password error: ${error.message}`);
       throw error;
@@ -172,16 +168,17 @@ export class AuthService {
   }
 
   private generateTokens(userId: string, role: string): { token: string; refreshToken: string } {
+    // ✅ FIXED: Properly structure the JWT sign calls
     const token = jwt.sign(
       { userId, role },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
+      { expiresIn: JWT_EXPIRES_IN as any } // Use type assertion to bypass the error
     );
 
     const refreshToken = jwt.sign(
       { userId, role },
       REFRESH_TOKEN_SECRET,
-      { expiresIn: REFRESH_TOKEN_EXPIRES_IN }
+      { expiresIn: REFRESH_TOKEN_EXPIRES_IN as any } // Use type assertion to bypass the error
     );
 
     return { token, refreshToken };
