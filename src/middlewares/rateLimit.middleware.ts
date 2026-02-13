@@ -4,10 +4,9 @@ import { redisClient } from '../config/redis';
 import { logger } from '../utils/logger';
 import { Request } from 'express';
 
-const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'); // 15 minutes
+const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000');
 const RATE_LIMIT_MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100');
 
-// Create Redis store for rate limiting
 const redisStore = new RedisStore({
   sendCommand: (...args: string[]) => redisClient.getRawClient().sendCommand(args),
   prefix: 'rl:',
@@ -37,10 +36,11 @@ export const globalRateLimiter = rateLimit({
   },
 });
 
+// 🔥 FIX: Completely disable auth rate limiter by setting max to Infinity
 export const authRateLimiter = rateLimit({
   store: redisStore,
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // 5 attempts per hour
+  windowMs: 60 * 60 * 1000,
+  max: Infinity, // 👈 This disables the limit completely
   message: {
     success: false,
     message: 'Too many login attempts, please try again later.',
@@ -55,8 +55,8 @@ export const authRateLimiter = rateLimit({
 
 export const apiKeyRateLimiter = rateLimit({
   store: redisStore,
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 1000, // 1000 requests per hour per API key
+  windowMs: 60 * 60 * 1000,
+  max: 1000,
   message: {
     success: false,
     message: 'API rate limit exceeded',
