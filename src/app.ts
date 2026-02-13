@@ -20,7 +20,7 @@ class App {
     this.app = express();
     this.port = port;
 
-    // Initialize in correct order - SWAGGER MUST COME BEFORE ROUTES
+    // Initialize in correct order
     this.initializeMiddlewares();
     this.initializeSwagger();
     this.initializeRoutes();
@@ -66,62 +66,63 @@ class App {
       }
     } catch (error: any) {
       logger.warn(`⚠️ Redis error: ${error.message}`);
-      // Don't throw - app continues without Redis
     }
   }
 
   private initializeMiddlewares(): void {
-    // Security middleware
-    this.app.use(helmet());
+    this.app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          imgSrc: ["'self'", "data:", "https:"],
+          mediaSrc: ["'self'", "data:", "blob:"],
+        },
+      },
+    }));
+    
     this.app.use(cors({
       origin: process.env.CORS_ORIGIN || '*',
       credentials: true,
     }));
 
-    // Body parsing middleware
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-    // Compression
     this.app.use(compression());
 
-    // Rate limiting - only if Redis is ready
     if (redisClient.isReady()) {
       this.app.use(globalRateLimiter);
     }
 
-    // Logging
     this.app.use(morgan('combined', { stream }));
-
-    // Static files
     this.app.use('/uploads', express.static('uploads'));
   }
 
   private initializeSwagger(): void {
     if (process.env.NODE_ENV !== 'production') {
-      // Serve swagger docs
       this.app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-      
-      // Serve swagger spec as JSON
       this.app.get('/docs.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.send(swaggerSpec);
       });
-      
       logger.info(`📚 Swagger docs available at: http://localhost:${this.port}/docs`);
-      logger.info(`📋 Swagger JSON at: http://localhost:${this.port}/docs.json`);
     }
   }
 
   private initializeRoutes(): void {
-    // ✅ ADDED: Root route handler
+    // ✅ ROOT ROUTE - MUST COME FIRST
     this.app.get('/', (req: Request, res: Response) => {
       res.json({
-        message: 'Eventful API',
-        docs: '/docs',
-        health: '/health',
+        message: '🎭 Alaya Eventful API',
         version: '1.0.0',
-        status: 'running'
+        status: 'running',
+        endpoints: {
+          docs: '/docs',
+          health: '/health',
+          api: '/api/v1'
+        },
+        documentation: 'https://github.com/Tushmovic/Capstone-Eventful'
       });
     });
 
@@ -138,7 +139,6 @@ class App {
         environment: process.env.NODE_ENV || 'development',
       };
 
-      // Add Redis ping test if connected
       if (redisClient.isReady()) {
         try {
           const pong = await redisClient.ping();
@@ -155,7 +155,7 @@ class App {
     // API routes
     this.app.use('/api/v1', routes);
 
-    // 404 handler - THIS MUST BE LAST!
+    // 404 handler - MUST BE LAST
     this.app.use('*', (req: Request, res: Response) => {
       res.status(404).json({
         success: false,
@@ -180,11 +180,9 @@ class App {
       `);
     });
 
-    // Graceful shutdown
     process.on('SIGTERM', () => this.gracefulShutdown(server));
     process.on('SIGINT', () => this.gracefulShutdown(server));
     
-    // Handle uncaught errors
     process.on('uncaughtException', (error: Error) => {
       logger.error(`❌ Uncaught Exception: ${error.message}`);
       logger.error(error.stack || '');
@@ -211,7 +209,6 @@ class App {
       process.exit(0);
     });
 
-    // Force shutdown after 10 seconds
     setTimeout(() => {
       logger.error('❌ Could not close connections in time, forcefully shutting down');
       process.exit(1);
