@@ -38,6 +38,12 @@ export class TicketService {
 
       const totalAmount = event.ticketPrice * quantity;
 
+      // 🔥 DEBUG LOGS - Check environment variables
+      console.log('🔍 FRONTEND_URL from env:', process.env.FRONTEND_URL);
+      console.log('🔍 Callback URL will be:', `${process.env.FRONTEND_URL}/payment/callback`);
+      console.log('🔍 User email:', user.email);
+      console.log('🔍 Total amount:', totalAmount);
+
       // 🔥 FIX: Let Paystack generate the reference - don't create your own
       const paymentData = await paystackService.initializeTransaction(
         user.email,
@@ -52,6 +58,8 @@ export class TicketService {
           totalAmount,
         }
       );
+
+      console.log('🔍 Paystack response:', paymentData);
 
       const paystackReference = paymentData.reference;
 
@@ -77,6 +85,7 @@ export class TicketService {
       };
     } catch (error: any) {
       logger.error(`❌ Ticket purchase error: ${error.message}`);
+      console.error('❌ Full error:', error);
       throw error;
     }
   }
