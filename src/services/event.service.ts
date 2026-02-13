@@ -219,7 +219,7 @@ export class EventService {
     }
   }
 
-  async addEventImages(eventId: string, creatorId: string, imageFiles: Express.Multer.File[]): Promise<IEvent | null> {
+  async addEventImages(eventId: string, creatorId: string, imageFiles: any[]): Promise<IEvent | null> {
     try {
       const event = await Event.findOne({ _id: eventId, creator: creatorId });
 

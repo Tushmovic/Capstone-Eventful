@@ -1,11 +1,11 @@
+import { Request } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { Request } from 'express';
 import { logger } from '../utils/logger';
 
 // Configure storage
 const storage = multer.diskStorage({
-  destination: function (req: Request, file: Express.Multer.File, cb: Function) {
+  destination: function (req: Request, file: any, cb: Function) {
     const uploadPath = 'uploads/event-images';
     
     // Create directory if it doesn't exist
@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
     
     cb(null, uploadPath);
   },
-  filename: function (req: Request, file: Express.Multer.File, cb: Function) {
+  filename: function (req: Request, file: any, cb: Function) {
     // Generate unique filename
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const ext = path.extname(file.originalname).toLowerCase();
