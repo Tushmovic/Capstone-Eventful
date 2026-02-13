@@ -50,7 +50,7 @@ router.post('/purchase', authenticated, validateRequest(purchaseTicketSchema), t
  * @swagger
  * /api/v1/tickets/verify/{reference}:
  *   get:
- *     summary: Verify payment and create ticket
+ *     summary: Verify payment and create ticket (PUBLIC - no auth required)
  *     tags: [Tickets]
  *     parameters:
  *       - in: path

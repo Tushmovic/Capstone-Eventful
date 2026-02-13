@@ -15,23 +15,28 @@ export class PaystackService {
   async initializeTransaction(
     email: string,
     amount: number,
-    reference: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    reference?: string
   ): Promise<{ 
     authorization_url: string; 
     access_code: string; 
     reference: string;
   }> {
     try {
+      const payload: any = {
+        email,
+        amount: amount * 100,
+        metadata,
+        callback_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/callback`,
+      };
+
+      if (reference) {
+        payload.reference = reference;
+      }
+
       const response = await axios.post<IPaystackInitializeResponse>(
         `${PAYSTACK_BASE_URL}/transaction/initialize`,
-        {
-          email,
-          amount: amount * 100, // Convert to kobo
-          reference,
-          metadata,
-          callback_url: `${process.env.API_BASE_URL}/api/v1/payments/verify`,
-        },
+        payload,
         { headers: this.headers }
       );
 

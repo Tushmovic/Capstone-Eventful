@@ -11,25 +11,24 @@ export class PaymentService {
     quantity: number;
   }) {
     try {
-      const reference = `EVT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Fix: Third parameter should be string (callback URL) or undefined
-      // We'll pass metadata as the third parameter (Paystack accepts object here)
+      // ✅ FIX: Call Paystack with correct parameter order - (email, amount, metadata, reference?)
       const paymentData = await paystackService.initializeTransaction(
         data.email,
         data.amount,
-        reference, // Reference should be third parameter
-        { // Metadata as fourth parameter
+        { // Metadata as second parameter
           userId: data.userId,
           eventId: data.eventId,
           quantity: data.quantity,
           type: 'ticket_purchase',
         }
+        // No reference - let Paystack generate it
       );
 
-      // Save payment intent
+      const paystackReference = paymentData.reference;
+
+      // Save payment intent with Paystack's reference
       const payment = new Payment({
-        reference,
+        reference: paystackReference,
         userId: data.userId,
         eventId: data.eventId,
         amount: data.amount,
@@ -44,7 +43,7 @@ export class PaymentService {
 
       return {
         paymentUrl: paymentData.authorization_url,
-        reference,
+        reference: paystackReference,
         accessCode: paymentData.access_code,
       };
     } catch (error: any) {
@@ -67,7 +66,6 @@ export class PaymentService {
       // Verify with Paystack
       const paystackData = await paystackService.verifyTransaction(reference);
       
-      // Fix: Type assertion to access paystack data properties
       const data = paystackData as any;
       
       if (data.status === 'success') {

@@ -1,11 +1,10 @@
-import Ticket from '../models/Ticket.model';
 import { Request, Response } from 'express';
 import { ticketService } from '../services/ticket.service';
 import { ApiResponse } from '../utils/response';
-import { validateRequest, validateQuery } from '../middlewares/validation.middleware';
-import { purchaseTicketSchema, verifyTicketSchema, cancelTicketSchema, ticketFilterSchema } from '../dtos/ticket.dto';
 import { logger } from '../utils/logger';
 import { clearCache } from '../middlewares/cache.middleware';
+import Event from '../models/Event.model';
+import Ticket from '../models/Ticket.model';
 
 export class TicketController {
   async purchaseTicket(req: Request, res: Response) {
@@ -51,9 +50,10 @@ export class TicketController {
         return ApiResponse.badRequest(res, result.message);
       }
 
-      // Clear relevant caches
-      await clearCache(`event:${result.ticket?.event._id}:tickets`);
-      await clearCache(`user:${result.ticket?.user._id}:tickets`);
+      if (result.ticket) {
+        await clearCache(`event:${(result.ticket.event as any)._id}:tickets`);
+        await clearCache(`user:${(result.ticket.user as any)._id}:tickets`);
+      }
 
       logger.info(`Payment verified: ${reference}`);
       
@@ -112,10 +112,10 @@ export class TicketController {
       // Apply client-side filtering if needed
       let filteredTickets = tickets;
       if (filters.status) {
-        filteredTickets = tickets.filter(ticket => ticket.status === filters.status);
+        filteredTickets = tickets.filter((ticket: any) => ticket.status === filters.status);
       }
       if (filters.eventId) {
-        filteredTickets = tickets.filter(ticket => 
+        filteredTickets = tickets.filter((ticket: any) => 
           ticket.event._id.toString() === filters.eventId
         );
       }
@@ -148,8 +148,6 @@ export class TicketController {
       const { eventId } = req.params;
       const userId = (req as any).user.userId;
       
-      // Verify user is the event creator
-      const Event = require('../models/Event.model').default;
       const event = await Event.findOne({ _id: eventId, creator: userId });
       
       if (!event) {
@@ -167,12 +165,12 @@ export class TicketController {
         tickets,
         summary: {
           total: tickets.length,
-          confirmed: tickets.filter(t => t.status === 'confirmed').length,
-          used: tickets.filter(t => t.status === 'used').length,
-          cancelled: tickets.filter(t => t.status === 'cancelled').length,
+          confirmed: tickets.filter((t: any) => t.status === 'confirmed').length,
+          used: tickets.filter((t: any) => t.status === 'used').length,
+          cancelled: tickets.filter((t: any) => t.status === 'cancelled').length,
           totalRevenue: tickets
-            .filter(t => t.paymentStatus === 'successful')
-            .reduce((sum, ticket) => sum + ticket.price, 0),
+            .filter((t: any) => t.paymentStatus === 'successful')
+            .reduce((sum: number, ticket: any) => sum + ticket.price, 0),
         },
       }, 'Event tickets retrieved successfully');
     } catch (error: any) {
@@ -188,7 +186,6 @@ export class TicketController {
 
       const ticket = await ticketService.cancelTicket(ticketId, userId);
 
-      // Clear caches
       await clearCache(`event:${ticket.event._id}:tickets`);
       await clearCache(`user:${userId}:tickets`);
       await clearCache(`event:${ticket.event._id}`);
@@ -219,7 +216,6 @@ export class TicketController {
       const { ticketId } = req.params;
       const userId = (req as any).user.userId;
 
-      const Ticket = require('../models/Ticket.model').default;
       const ticket = await Ticket.findOne({ _id: ticketId, user: userId })
         .populate('event')
         .populate('user', 'name email profileImage');
