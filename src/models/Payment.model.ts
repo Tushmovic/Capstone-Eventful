@@ -20,19 +20,19 @@ const paymentSchema = new Schema<IPayment, IPaymentModel>(
       ref: 'User',
       required: [true, 'User is required'],
       index: true,
-    },
+    } as any,
     eventId: {
       type: Schema.Types.ObjectId,
       ref: 'Event',
       required: [true, 'Event is required'],
       index: true,
-    },
+    } as any,
     ticketId: {
       type: Schema.Types.ObjectId,
       ref: 'Ticket',
       required: [true, 'Ticket is required'],
       index: true,
-    },
+    } as any,
     amount: {
       type: Number,
       required: [true, 'Amount is required'],

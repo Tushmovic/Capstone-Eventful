@@ -104,7 +104,7 @@ const eventSchema = new Schema<IEvent>(
       ref: 'User',
       required: true,
       index: true,
-    },
+    } as any,
     ticketPrice: {
       type: Number,
       required: [true, 'Ticket price is required'],

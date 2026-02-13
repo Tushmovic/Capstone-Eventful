@@ -21,13 +21,13 @@ const ticketSchema = new Schema<ITicket, ITicketModel>(
       ref: 'Event',
       required: [true, 'Event is required'],
       index: true,
-    },
+    } as any,
     user: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'User is required'],
       index: true,
-    },
+    } as any,
     price: {
       type: Number,
       required: [true, 'Price is required'],
