@@ -27,8 +27,12 @@ const transporter = hasCredentials ? nodemailer.createTransport({
     user: SMTP_USER,
     pass: SMTP_PASS,
   },
+  connectionTimeout: 10000, // Added timeout
+  socketTimeout: 10000, // Added timeout
   tls: {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+    // Force IPv4 by specifying ciphers
+    ciphers: 'DEFAULT@SECLEVEL=1'
   }
 }) : null;
 

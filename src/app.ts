@@ -22,8 +22,8 @@ class App {
 
     // Initialize in correct order - SWAGGER MUST COME BEFORE ROUTES
     this.initializeMiddlewares();
-    this.initializeSwagger();     // ✅ MOVED UP - before routes and 404 handler
-    this.initializeRoutes();      // ⬅️ Routes after Swagger
+    this.initializeSwagger();
+    this.initializeRoutes();
     this.initializeErrorHandling();
     
     // Start async initializations
@@ -114,6 +114,17 @@ class App {
   }
 
   private initializeRoutes(): void {
+    // ✅ ADDED: Root route handler
+    this.app.get('/', (req: Request, res: Response) => {
+      res.json({
+        message: 'Eventful API',
+        docs: '/docs',
+        health: '/health',
+        version: '1.0.0',
+        status: 'running'
+      });
+    });
+
     // Health check endpoint
     this.app.get('/health', async (req: Request, res: Response) => {
       const healthStatus: any = {
