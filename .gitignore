@@ -47,4 +47,9 @@ uploads/**/*
 .cache/
 
 # Misc
-*.tsbuildinfo
+*.tsbuildinfo.env
+.env.*
+dist/
+node_modules/
+logs/
+uploads/
