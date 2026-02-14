@@ -18,21 +18,10 @@ export class TicketService {
     try {
       const { eventId, quantity, userId } = purchaseData;
 
-      console.log('\n🔍 ========== TICKET PURCHASE DEBUG ==========');
-      console.log('Step 0 - Purchase started:', { eventId, quantity, userId });
-
       const event = await Event.findById(eventId);
       if (!event) {
         throw new Error('Event not found');
       }
-
-      console.log('🔍 Step 1 - Event from DB:', {
-        id: event._id,
-        title: event.title,
-        ticketPrice: event.ticketPrice,
-        inNaira: event.ticketPrice / 100,
-        expectedNairaForDisplay: `₦${(event.ticketPrice / 100).toLocaleString()}`
-      });
 
       if (event.status !== 'published') {
         throw new Error('Event is not available for ticket purchase');
@@ -47,37 +36,20 @@ export class TicketService {
         throw new Error('User not found');
       }
 
-      console.log('🔍 Step 2 - User found:', {
-        id: user._id,
-        email: user.email,
-        name: user.name
-      });
+      // 🔥 FIX: Calculate total in kobo correctly including quantity
+      // event.ticketPrice is already in kobo (e.g., 500000 for ₦5000)
+      const totalAmountInKobo = event.ticketPrice * quantity; // e.g., 500000 * 2 = 1,000,000 kobo (₦10,000)
+      
+      // Store the naira amount for Redis (for ticket creation later)
+      const nairaTotal = (event.ticketPrice / 100) * quantity; // e.g., 5000 * 2 = 10,000 naira
 
-      const totalAmountInKobo = event.ticketPrice * quantity;
-      const nairaTotal = (event.ticketPrice / 100) * quantity;
-
-      console.log('🔍 Step 3 - Amount calculations:', {
-        ticketPriceInKobo: event.ticketPrice,
-        ticketPriceInNaira: event.ticketPrice / 100,
-        quantity,
-        totalAmountInKobo,
-        totalAmountInNaira: totalAmountInKobo / 100,
-        nairaTotalForRedis: nairaTotal
-      });
-
+      // Generate a truly unique reference to avoid Paystack cache
       const uniqueReference = `EVT_${Date.now()}_${userId.substring(0,5)}_${Math.random().toString(36).substring(2, 8)}`;
 
-      console.log('🔍 Step 4 - Generated reference:', uniqueReference);
-      console.log('🔍 Step 5 - Calling paystackService.initializeTransaction with:', {
-        email: user.email,
-        amount: totalAmountInKobo,
-        amountInNaira: totalAmountInKobo / 100,
-        expectedPaystackDisplay: `₦${(totalAmountInKobo / 100).toLocaleString()}`
-      });
-
+      // Initialize payment with Paystack - using kobo amount
       const paymentData = await paystackService.initializeTransaction(
         user.email,
-        totalAmountInKobo,
+        totalAmountInKobo, // Send kobo amount to Paystack
         {
           eventId: event._id.toString(),
           eventTitle: event.title,
@@ -86,50 +58,38 @@ export class TicketService {
           quantity,
           ticketPrice: event.ticketPrice,
           totalAmount: totalAmountInKobo,
-          nairaTotal,
+          nairaTotal, // Store naira amount for reference
           uniqueReference,
           reference: uniqueReference,
         }
       );
 
-      console.log('🔍 Step 6 - Paystack response:', {
-        reference: paymentData.reference,
-        authorization_url: paymentData.authorization_url,
-        hasAccessCode: !!paymentData.access_code
-      });
-
       const paystackReference = paymentData.reference;
 
+      // 🔥 FIX: Store naira amount in Redis, not kobo
       const redisValue = JSON.stringify({
         eventId: event._id.toString(),
         userId: userId.toString(),
         quantity,
-        totalAmount: nairaTotal,
+        totalAmount: nairaTotal, // Store naira amount for ticket creation
         status: 'pending',
         createdAt: new Date().toISOString(),
         uniqueReference,
       });
 
-      console.log('🔍 Step 7 - Redis value prepared:', {
-        key: `payment:${paystackReference}`,
-        data: JSON.parse(redisValue)
-      });
-
       await redisClient.set(`payment:${paystackReference}`, redisValue);
-      
-      console.log('🔍 Step 8 - Redis storage complete');
-      console.log('🔍 ========== END PURCHASE DEBUG ==========\n');
-      
+      logger.info(`✅ Payment intent stored in Redis: ${paystackReference}`);
+      logger.info(`✅ Unique reference generated: ${uniqueReference}`);
+      logger.info(`✅ Amount: ₦${nairaTotal} (${totalAmountInKobo} kobo) for ${quantity} ticket(s)`);
+
       logger.info(`✅ Payment initialized for event ${eventId} by user ${userId}, ref: ${paystackReference}`);
-      logger.info(`💰 Amount: ₦${nairaTotal} (${totalAmountInKobo} kobo) for ${quantity} ticket(s)`);
       
       return {
         paymentUrl: paymentData.authorization_url,
         reference: paystackReference,
-        amount: totalAmountInKobo,
+        amount: totalAmountInKobo, // Return kobo amount for reference
       };
     } catch (error: any) {
-      console.error('❌ ERROR in purchaseTicket:', error);
       logger.error(`❌ Ticket purchase error: ${error.message}`);
       throw error;
     }
@@ -141,13 +101,12 @@ export class TicketService {
     message: string;
   }> {
     try {
-      console.log(`\n🔍 ========== VERIFY PAYMENT DEBUG ==========`);
-      console.log('Step V1 - Started for reference:', reference);
+      logger.info(`🔍 Verifying payment: ${reference}`);
 
       const paymentIntent = await redisClient.get(`payment:${reference}`);
       
       if (!paymentIntent) {
-        console.error('🔍 Step V2 - No payment intent found in Redis');
+        logger.error(`❌ Payment session not found in Redis: ${reference}`);
         return {
           success: false,
           message: 'Payment session expired or not found. Please try purchasing again.',
@@ -155,17 +114,10 @@ export class TicketService {
       }
 
       const paymentIntentData = JSON.parse(paymentIntent);
-      console.log('🔍 Step V2 - Payment intent data:', paymentIntentData);
+      logger.info(`✅ Found payment intent in Redis: ${reference}`);
 
       const paymentData = await paystackService.verifyTransaction(reference);
-      console.log('🔍 Step V3 - Paystack verification response:', {
-        status: paymentData.status,
-        amount: paymentData.amount,
-        amountInNaira: paymentData.amount / 100,
-        reference: paymentData.reference
-      });
       
-      // 🔥 FIX: Use type assertion for gateway_response
       if (paymentData.status !== 'success') {
         const gatewayResponse = (paymentData as any).gateway_response;
         throw new Error(`Payment verification failed: ${gatewayResponse || 'Unknown error'}`);
@@ -173,29 +125,19 @@ export class TicketService {
 
       const ticketNumber = qrCodeService.generateTicketNumber();
       
+      // 🔥 FIX: Calculate price per ticket correctly (convert naira back to kobo)
       const pricePerTicket = Math.round((paymentIntentData.totalAmount / paymentIntentData.quantity) * 100);
       
-      console.log('🔍 Step V4 - Creating ticket with:', {
-        eventId: paymentIntentData.eventId,
-        userId: paymentIntentData.userId,
-        ticketNumber,
-        pricePerTicketInKobo: pricePerTicket,
-        priceInNaira: pricePerTicket / 100,
-        quantity: paymentIntentData.quantity,
-        totalNaira: paymentIntentData.totalAmount
-      });
-
       const ticket = await this.createTicket({
         eventId: paymentIntentData.eventId,
         userId: paymentIntentData.userId,
         ticketNumber,
-        price: pricePerTicket,
+        price: pricePerTicket, // Store in kobo
         paymentReference: reference,
       });
 
       await redisClient.del(`payment:${reference}`);
-      console.log('🔍 Step V5 - Ticket created successfully:', ticket._id);
-      console.log('🔍 ========== END VERIFY DEBUG ==========\n');
+      logger.info(`✅ Payment verified and ticket created: ${reference}`);
 
       return {
         success: true,
@@ -203,7 +145,7 @@ export class TicketService {
         message: 'Payment successful and ticket created',
       };
     } catch (error: any) {
-      console.error('🔍 VERIFY - Error:', error);
+      logger.error(`❌ Verify payment error: ${error.message}`);
       return {
         success: false,
         message: error.message || 'Payment verification failed',
@@ -224,7 +166,7 @@ export class TicketService {
         ticketNumber,
         event: eventId,
         user: userId,
-        price,
+        price, // Price is already in kobo
         qrCode: qrCodeUrl,
         paymentReference,
         paymentStatus: 'successful',
