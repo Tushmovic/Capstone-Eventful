@@ -3,6 +3,15 @@ import { IEvent, IEventInput, IEventUpdate, IEventFilter } from '../interfaces/e
 import { logger } from '../utils/logger';
 import { getFileUrl, deleteFile } from '../config/upload';
 import User from '../models/User.model';
+import { v2 as cloudinary, UploadApiResponse, UploadApiErrorResponse } from 'cloudinary';
+import { Readable } from 'stream';
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 export class EventService {
   async createEvent(eventData: IEventInput, creatorId: string): Promise<IEvent> {
@@ -90,7 +99,7 @@ export class EventService {
         return false;
       }
 
-      // Delete associated images
+      // Delete associated images from Cloudinary
       event.images.forEach(image => {
         deleteFile(image);
       });
@@ -215,6 +224,38 @@ export class EventService {
     }
   }
 
+  async uploadImageToCloudinary(file: any): Promise<string> {
+    try {
+      const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'eventful/events',
+            resource_type: 'image',
+          },
+          (error: UploadApiErrorResponse | undefined, result: UploadApiResponse | undefined) => {
+            if (error) {
+              reject(error);
+            } else if (result) {
+              resolve(result);
+            } else {
+              reject(new Error('Unknown upload error'));
+            }
+          }
+        );
+
+        const readableStream = new Readable();
+        readableStream.push(file.buffer);
+        readableStream.push(null);
+        readableStream.pipe(uploadStream);
+      });
+
+      return (result as any).secure_url;
+    } catch (error: any) {
+      logger.error(`❌ Cloudinary upload error: ${error.message}`);
+      throw error;
+    }
+  }
+
   async addEventImages(eventId: string, creatorId: string, imageFiles: any[]): Promise<IEvent | null> {
     try {
       const event = await Event.findOne({ _id: eventId, creator: creatorId });
@@ -223,13 +264,18 @@ export class EventService {
         return null;
       }
 
-      // Add new images
-      const newImages = imageFiles.map(file => file.filename);
-      event.images.push(...newImages);
+      // Upload each image to Cloudinary
+      const imageUrls = [];
+      for (const file of imageFiles) {
+        const imageUrl = await this.uploadImageToCloudinary(file);
+        imageUrls.push(imageUrl);
+      }
 
+      // Add Cloudinary URLs to event
+      event.images.push(...imageUrls);
       await event.save();
 
-      logger.info(`Added ${newImages.length} images to event: ${eventId}`);
+      logger.info(`Added ${imageUrls.length} images to event: ${eventId}`);
       return event.populate('creator', 'name email profileImage');
     } catch (error: any) {
       logger.error(`Add event images error: ${error.message}`);
@@ -249,7 +295,11 @@ export class EventService {
       const imageIndex = event.images.indexOf(imageFilename);
       if (imageIndex > -1) {
         event.images.splice(imageIndex, 1);
-        deleteFile(imageFilename);
+        // Delete from Cloudinary
+        const publicId = imageFilename.split('/').pop()?.split('.')[0];
+        if (publicId) {
+          await cloudinary.uploader.destroy(`eventful/events/${publicId}`);
+        }
         await event.save();
       }
 

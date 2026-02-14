@@ -1,32 +1,12 @@
 import { Request } from 'express';
 import multer from 'multer';
-import path from 'path';
 import { logger } from '../utils/logger';
 
-// Configure storage
-const storage = multer.diskStorage({
-  destination: function (req: Request, file: any, cb: Function) {
-    const uploadPath = 'uploads/event-images';
-    
-    // Create directory if it doesn't exist
-    const fs = require('fs');
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
-    
-    cb(null, uploadPath);
-  },
-  filename: function (req: Request, file: any, cb: Function) {
-    // Generate unique filename
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `event-${uniqueSuffix}${ext}`);
-  }
-});
+// Configure memory storage (for Cloudinary)
+const storage = multer.memoryStorage();
 
 // File filter
 const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  // Allowed file types
   const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
   
   if (allowedMimeTypes.includes(file.mimetype)) {
@@ -46,31 +26,17 @@ export const upload = multer({
   }
 });
 
-// Helper function to get file URLs
+// Helper function to get file URLs (now returns Cloudinary URLs directly)
 export const getFileUrl = (filename: string): string => {
-  if (!filename) return '';
-  
-  // If it's already a URL, return as is
-  if (filename.startsWith('http')) {
-    return filename;
-  }
-  
-  // Otherwise, construct URL
-  const baseUrl = process.env.API_BASE_URL || 'http://localhost:5000';
-  return `${baseUrl}/uploads/event-images/${filename}`;
+  return filename; // Cloudinary URLs are already full URLs
 };
 
-// Helper to delete file
+// Helper to delete file from Cloudinary
 export const deleteFile = (filename: string): void => {
-  if (!filename || filename.startsWith('http')) return;
+  if (!filename) return;
   
-  const fs = require('fs');
-  const filePath = `uploads/event-images/${filename}`;
-  
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-    logger.info(`Deleted file: ${filePath}`);
-  }
+  // Cloudinary URLs are handled in the service
+  logger.info(`Cloudinary file marked for deletion: ${filename}`);
 };
 
 // Middleware for handling upload errors

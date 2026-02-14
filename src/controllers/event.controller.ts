@@ -1,12 +1,11 @@
 import { Request, Response } from 'express';
-import mongoose from 'mongoose'; // ADDED THIS IMPORT
+import mongoose from 'mongoose';
 import { eventService } from '../services/event.service';
 import { ApiResponse } from '../utils/response';
 import { validateRequest, validateQuery } from '../middlewares/validation.middleware';
 import { createEventSchema, updateEventSchema, eventFilterSchema } from '../dtos/event.dto';
 import { logger } from '../utils/logger';
-import { getFileUrl } from '../config/upload';
-import { cacheMiddleware, clearCache, generateCacheKey } from '../middlewares/cache.middleware';
+import { clearCache } from '../middlewares/cache.middleware';
 
 export class EventController {
   async createEvent(req: Request, res: Response) {
@@ -50,13 +49,7 @@ export class EventController {
         return ApiResponse.forbidden(res, 'You do not have permission to view this event');
       }
 
-      // Convert image filenames to URLs
-      const eventWithUrls = {
-        ...event,
-        images: event.images.map(img => getFileUrl(img))
-      };
-
-      return ApiResponse.success(res, eventWithUrls, 'Event retrieved successfully');
+      return ApiResponse.success(res, event, 'Event retrieved successfully');
     } catch (error: any) {
       logger.error(`Get event controller error: ${error.message}`);
       return ApiResponse.error(res, 'Failed to get event');
@@ -130,14 +123,8 @@ export class EventController {
 
       const result = await eventService.getEvents(filters as any, page, limit);
 
-      // Convert image filenames to URLs
-      const eventsWithUrls = result.events.map(event => ({
-        ...event,
-        images: event.images.map(img => getFileUrl(img))
-      }));
-
       return ApiResponse.success(res, {
-        events: eventsWithUrls,
+        events: result.events,
         pagination: result.pagination
       }, 'Events retrieved successfully');
     } catch (error: any) {
@@ -155,14 +142,8 @@ export class EventController {
 
       const result = await eventService.getEventsByCreator(creatorId, pageNum, limitNum);
 
-      // Convert image filenames to URLs
-      const eventsWithUrls = result.events.map(event => ({
-        ...event,
-        images: event.images.map(img => getFileUrl(img))
-      }));
-
       return ApiResponse.success(res, {
-        events: eventsWithUrls,
+        events: result.events,
         pagination: result.pagination
       }, 'Your events retrieved successfully');
     } catch (error: any) {
@@ -190,14 +171,8 @@ export class EventController {
       // Clear cache
       await clearCache(`events:${id}`);
 
-      // Convert image filenames to URLs
-      const eventWithUrls = {
-        ...event.toObject(),
-        images: event.images.map(img => getFileUrl(img))
-      };
-
       logger.info(`Images uploaded to event: ${id} by user ${creatorId}`);
-      return ApiResponse.success(res, eventWithUrls, 'Images uploaded successfully');
+      return ApiResponse.success(res, event, 'Images uploaded successfully');
     } catch (error: any) {
       logger.error(`Upload event images controller error: ${error.message}`);
       return ApiResponse.error(res, 'Failed to upload images');
@@ -218,14 +193,8 @@ export class EventController {
       // Clear cache
       await clearCache(`events:${id}`);
 
-      // Convert image filenames to URLs
-      const eventWithUrls = {
-        ...event.toObject(),
-        images: event.images.map(img => getFileUrl(img))
-      };
-
       logger.info(`Image removed from event: ${id} by user ${creatorId}`);
-      return ApiResponse.success(res, eventWithUrls, 'Image removed successfully');
+      return ApiResponse.success(res, event, 'Image removed successfully');
     } catch (error: any) {
       logger.error(`Remove event image controller error: ${error.message}`);
       return ApiResponse.error(res, 'Failed to remove image');
@@ -236,14 +205,12 @@ export class EventController {
     try {
       const { id } = req.params;
 
-      // Increment share count
       const event = await eventService.incrementEventShares(id);
 
       if (!event) {
         return ApiResponse.notFound(res, 'Event not found');
       }
 
-      // Get share URLs
       const shareUrls = await eventService.getEventShareUrl(id);
 
       return ApiResponse.success(res, {
@@ -259,7 +226,6 @@ export class EventController {
 
   async getEventCategories(req: Request, res: Response) {
     try {
-      // Use mongoose connection to access raw MongoDB collection
       const db = mongoose.connection.db;
       if (!db) {
         throw new Error('Database not connected');
@@ -267,13 +233,11 @@ export class EventController {
 
       const eventsCollection = db.collection('events');
       
-      // Use MongoDB native methods
       const categories = await eventsCollection.distinct('category', {
         status: 'published',
         visibility: 'public'
       });
       
-      // Get count for each category
       const categoriesWithCount = await Promise.all(
         categories.map(async (category: string) => {
           const count = await eventsCollection.countDocuments({ 
