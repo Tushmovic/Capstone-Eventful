@@ -108,6 +108,43 @@ export class PaystackService {
       throw error;
     }
   }
+async initiateRefund(reference: string, amount?: number, reason?: string): Promise<any> {
+  try {
+    const payload: any = {
+      transaction: reference,
+    };
+    
+    if (amount) {
+      payload.amount = amount * 100; // Convert to kobo
+    }
+    
+    if (reason) {
+      payload.reason = reason;
+    }
+
+    const response = await axios.post(
+      `${PAYSTACK_BASE_URL}/refund`,
+      payload,
+      { headers: this.headers }
+    );
+
+    if (!response.data.status) {
+      throw new Error(response.data.message || 'Failed to initiate refund');
+    }
+
+    logger.info(`✅ Refund initiated for transaction: ${reference}`);
+    return {
+      status: true,
+      data: response.data.data
+    };
+  } catch (error: any) {
+    logger.error(`❌ Paystack refund error: ${error.message}`);
+    return {
+      status: false,
+      message: error.message
+    };
+  }
+}
 
   async verifyWebhookSignature(payload: any, signature: string): Promise<boolean> {
     try {
