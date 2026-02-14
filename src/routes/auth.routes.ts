@@ -7,9 +7,10 @@ import {
   refreshTokenSchema, 
   changePasswordSchema, 
   updateProfileSchema 
-} from '../dtos/auth.dto'; // This import should work now
+} from '../dtos/auth.dto';
 import { authenticated, creatorOnly, eventeeOnly } from '../middlewares/auth.middleware';
 import { authRateLimiter } from '../middlewares/rateLimit.middleware';
+import { upload } from '../config/upload'; // 🔥 ADD THIS IMPORT
 
 const router = Router();
 
@@ -207,5 +208,29 @@ router.put('/profile', authenticated, validateRequest(updateProfileSchema), auth
  *         description: Current password is incorrect
  */
 router.post('/change-password', authenticated, validateRequest(changePasswordSchema), authController.changePassword);
+
+/**
+ * @swagger
+ * /api/v1/auth/profile/upload-image:
+ *   post:
+ *     summary: Upload profile picture
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               profileImage:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Profile image uploaded successfully
+ */
+router.post('/profile/upload-image', authenticated, upload.single('profileImage'), authController.uploadProfileImage);
 
 export default router;

@@ -3,6 +3,7 @@ import { IUser, IUserInput, ILoginInput, IAuthResponse } from '../interfaces/use
 import jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger';
 import { constants } from '../config/constants';
+import { uploadToCloudinary } from '../utils/cloudinary';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -167,18 +168,41 @@ export class AuthService {
     }
   }
 
+  async uploadProfileImage(userId: string, file: any): Promise<string> {
+    try {
+      // Upload to Cloudinary
+      const imageUrl = await uploadToCloudinary(file.buffer, 'profiles');
+      
+      // Update user
+      const user = await User.findByIdAndUpdate(
+        userId, 
+        { profileImage: imageUrl },
+        { new: true }
+      );
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
+      logger.info(`✅ Profile image uploaded for user: ${userId}`);
+      return imageUrl;
+    } catch (error: any) {
+      logger.error(`Upload profile image error: ${error.message}`);
+      throw error;
+    }
+  }
+
   private generateTokens(userId: string, role: string): { token: string; refreshToken: string } {
-    // ✅ FIXED: Properly structure the JWT sign calls
     const token = jwt.sign(
       { userId, role },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN as any } // Use type assertion to bypass the error
+      { expiresIn: JWT_EXPIRES_IN as any }
     );
 
     const refreshToken = jwt.sign(
       { userId, role },
       REFRESH_TOKEN_SECRET,
-      { expiresIn: REFRESH_TOKEN_EXPIRES_IN as any } // Use type assertion to bypass the error
+      { expiresIn: REFRESH_TOKEN_EXPIRES_IN as any }
     );
 
     return { token, refreshToken };

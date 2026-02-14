@@ -131,6 +131,26 @@ export class AuthController {
       return ApiResponse.error(res, 'Logout failed');
     }
   }
+
+  // 🔥 NEW: Upload profile image
+  async uploadProfileImage(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user.userId;
+      const file = req.file;
+      
+      if (!file) {
+        return ApiResponse.badRequest(res, 'No image uploaded');
+      }
+
+      // Upload to Cloudinary
+      const imageUrl = await authService.uploadProfileImage(userId, file);
+      
+      return ApiResponse.success(res, { profileImage: imageUrl }, 'Profile image uploaded successfully');
+    } catch (error: any) {
+      logger.error(`Upload profile image error: ${error.message}`);
+      return ApiResponse.error(res, 'Failed to upload image');
+    }
+  }
 }
 
 export const authController = new AuthController();
