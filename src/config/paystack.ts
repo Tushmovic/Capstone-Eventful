@@ -26,16 +26,25 @@ export class PaystackService {
       console.log('\n🔍 ========== PAYSTACK SERVICE DEBUG ==========');
       console.log('🔍 PStep 1 - initializeTransaction received:', {
         email,
-        amount,
-        amountInNaira: amount / 100,
+        amountInKobo: amount,
+        expectedNaira: amount / 100,
         expectedDisplay: `₦${(amount / 100).toLocaleString()}`,
         hasMetadata: !!metadata,
         hasReference: !!reference
       });
 
+      // 🔥 CRITICAL FIX: Paystack is multiplying by 100, so we need to send in Naira!
+      const amountInNaira = amount / 100;
+      
+      console.log('🔍 PStep 1b - After dividing by 100:', {
+        amountInNaira,
+        willBeMultipliedByPaystack: amountInNaira * 100,
+        finalAmount: amountInNaira * 100
+      });
+
       const payload: any = {
         email,
-        amount,
+        amount: amountInNaira, // Send in Naira, not kobo!
         metadata,
       };
 
@@ -46,7 +55,7 @@ export class PaystackService {
       console.log('🔍 PStep 2 - Payload being sent to Paystack API:', {
         email: payload.email,
         amount: payload.amount,
-        amountInNaira: payload.amount / 100,
+        amountInKobo: payload.amount * 100,
         hasReference: !!payload.reference,
         metadataKeys: payload.metadata ? Object.keys(payload.metadata) : []
       });
@@ -135,7 +144,7 @@ export class PaystackService {
         `${PAYSTACK_BASE_URL}/transfer`,
         {
           source: 'balance',
-          amount: amount * 100, // Fixed: Amount should be in kobo for transfers
+          amount: amount * 100, // Amount should be in kobo for transfers
           recipient: recipientCode,
           reason,
         },
