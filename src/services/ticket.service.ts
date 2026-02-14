@@ -36,15 +36,20 @@ export class TicketService {
         throw new Error('User not found');
       }
 
-      const totalAmount = event.ticketPrice;
+      // 🔥 FIX: Calculate total in kobo correctly including quantity
+      // event.ticketPrice is already in kobo (e.g., 500000 for ₦5000)
+      const totalAmountInKobo = event.ticketPrice * quantity; // e.g., 500000 * 2 = 1,000,000 kobo (₦10,000)
+      
+      // Store the naira amount for Redis (for ticket creation later)
+      const nairaTotal = (event.ticketPrice / 100) * quantity; // e.g., 5000 * 2 = 10,000 naira
 
-      // 🔥 Generate a truly unique reference to avoid Paystack cache
+      // Generate a truly unique reference to avoid Paystack cache
       const uniqueReference = `EVT_${Date.now()}_${userId.substring(0,5)}_${Math.random().toString(36).substring(2, 8)}`;
 
-      // Initialize payment with Paystack - reference passed INSIDE metadata
+      // Initialize payment with Paystack - using kobo amount
       const paymentData = await paystackService.initializeTransaction(
         user.email,
-        totalAmount,
+        totalAmountInKobo, // Send kobo amount to Paystack
         {
           eventId: event._id.toString(),
           eventTitle: event.title,
@@ -52,20 +57,21 @@ export class TicketService {
           userName: user.name,
           quantity,
           ticketPrice: event.ticketPrice,
-          totalAmount,
+          totalAmount: totalAmountInKobo,
+          nairaTotal, // Store naira amount for reference
           uniqueReference,
-          reference: uniqueReference, // Reference inside metadata
+          reference: uniqueReference,
         }
       );
 
       const paystackReference = paymentData.reference;
 
-      // Store payment intent in Redis using Paystack's reference
+      // 🔥 FIX: Store naira amount in Redis, not kobo
       const redisValue = JSON.stringify({
         eventId: event._id.toString(),
         userId: userId.toString(),
         quantity,
-        totalAmount,
+        totalAmount: nairaTotal, // Store naira amount for ticket creation
         status: 'pending',
         createdAt: new Date().toISOString(),
         uniqueReference,
@@ -74,13 +80,14 @@ export class TicketService {
       await redisClient.set(`payment:${paystackReference}`, redisValue);
       logger.info(`✅ Payment intent stored in Redis: ${paystackReference}`);
       logger.info(`✅ Unique reference generated: ${uniqueReference}`);
+      logger.info(`✅ Amount: ₦${nairaTotal} (${totalAmountInKobo} kobo) for ${quantity} ticket(s)`);
 
       logger.info(`✅ Payment initialized for event ${eventId} by user ${userId}, ref: ${paystackReference}`);
       
       return {
         paymentUrl: paymentData.authorization_url,
         reference: paystackReference,
-        amount: totalAmount,
+        amount: totalAmountInKobo, // Return kobo amount for reference
       };
     } catch (error: any) {
       logger.error(`❌ Ticket purchase error: ${error.message}`);
@@ -117,11 +124,15 @@ export class TicketService {
       }
 
       const ticketNumber = qrCodeService.generateTicketNumber();
+      
+      // 🔥 FIX: Calculate price per ticket correctly (convert naira back to kobo)
+      const pricePerTicket = Math.round((paymentIntentData.totalAmount / paymentIntentData.quantity) * 100);
+      
       const ticket = await this.createTicket({
         eventId: paymentIntentData.eventId,
         userId: paymentIntentData.userId,
         ticketNumber,
-        price: paymentIntentData.totalAmount / paymentIntentData.quantity,
+        price: pricePerTicket, // Store in kobo
         paymentReference: reference,
       });
 
@@ -155,7 +166,7 @@ export class TicketService {
         ticketNumber,
         event: eventId,
         user: userId,
-        price,
+        price, // Price is already in kobo
         qrCode: qrCodeUrl,
         paymentReference,
         paymentStatus: 'successful',
