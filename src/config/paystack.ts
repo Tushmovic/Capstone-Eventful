@@ -23,28 +23,19 @@ export class PaystackService {
     reference: string;
   }> {
     try {
-      console.log('\n🔍 ========== PAYSTACK SERVICE DEBUG ==========');
-      console.log('🔍 PStep 1 - initializeTransaction received:', {
-        email,
-        amountInKobo: amount,
-        expectedNaira: amount / 100,
-        expectedDisplay: `₦${(amount / 100).toLocaleString()}`,
-        hasMetadata: !!metadata,
-        hasReference: !!reference
-      });
-
-      // 🔥 CRITICAL FIX: Paystack is multiplying by 100, so we need to send in Naira!
-      const amountInNaira = amount / 100;
+      // 🔥 CRITICAL FIX: Paystack test environment multiplies by 100
+      // So we need to send the amount in Naira (divide by 100)
+      const amountInNaira = Math.round(amount / 100);
       
-      console.log('🔍 PStep 1b - After dividing by 100:', {
-        amountInNaira,
-        willBeMultipliedByPaystack: amountInNaira * 100,
-        finalAmount: amountInNaira * 100
+      console.log('🔍 Paystack Debug:', {
+        receivedKobo: amount,
+        sendingNaira: amountInNaira,
+        expectedDisplay: `₦${amountInNaira}`
       });
 
       const payload: any = {
         email,
-        amount: amountInNaira, // Send in Naira, not kobo!
+        amount: amountInNaira, // Send in Naira!
         metadata,
       };
 
@@ -52,35 +43,15 @@ export class PaystackService {
         payload.reference = reference;
       }
 
-      console.log('🔍 PStep 2 - Payload being sent to Paystack API:', {
-        email: payload.email,
-        amount: payload.amount,
-        amountInKobo: payload.amount * 100,
-        hasReference: !!payload.reference,
-        metadataKeys: payload.metadata ? Object.keys(payload.metadata) : []
-      });
-
       const response = await axios.post<IPaystackInitializeResponse>(
         `${PAYSTACK_BASE_URL}/transaction/initialize`,
         payload,
         { headers: this.headers }
       );
 
-      console.log('🔍 PStep 3 - Raw Paystack response status:', response.data.status);
-      
-      if (response.data.status) {
-        console.log('🔍 PStep 4 - Paystack response data:', {
-          authorization_url: response.data.data.authorization_url,
-          reference: response.data.data.reference,
-          access_code_provided: !!response.data.data.access_code
-        });
-      }
-
       if (!response.data.status) {
         throw new Error(response.data.message || 'Failed to initialize payment');
       }
-
-      console.log('🔍 ========== END PAYSTACK DEBUG ==========\n');
 
       return {
         authorization_url: response.data.data.authorization_url,
@@ -88,7 +59,6 @@ export class PaystackService {
         reference: response.data.data.reference,
       };
     } catch (error: any) {
-      console.error('❌ Paystack service error:', error.message);
       logger.error(`Paystack initialize transaction error: ${error.message}`);
       throw new Error('Failed to initialize payment');
     }
@@ -144,7 +114,7 @@ export class PaystackService {
         `${PAYSTACK_BASE_URL}/transfer`,
         {
           source: 'balance',
-          amount: amount * 100, // Amount should be in kobo for transfers
+          amount: amount * 100, // For transfers, send in kobo
           recipient: recipientCode,
           reason,
         },
