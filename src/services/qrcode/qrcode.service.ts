@@ -1,5 +1,5 @@
 import QRCode from 'qrcode';
-import { v2 as cloudinary } from 'cloudinary';
+import { v2 as cloudinary, UploadApiResponse, UploadApiErrorResponse } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../utils/logger';
 import { Readable } from 'stream';
@@ -13,13 +13,11 @@ cloudinary.config({
 
 export class QRCodeService {
   constructor() {
-    // Log Cloudinary config (without exposing secrets)
     logger.info(`✅ Cloudinary configured with cloud name: ${process.env.CLOUDINARY_CLOUD_NAME}`);
   }
 
   async generateTicketQRCode(ticketNumber: string, ticketId: string): Promise<{ qrCodeData: string; qrCodeUrl: string }> {
     try {
-      // Create QR code data
       const verificationUrl = `${process.env.API_BASE_URL}/api/v1/tickets/verify/${ticketNumber}`;
       const qrData = JSON.stringify({
         ticketId,
@@ -28,7 +26,6 @@ export class QRCodeService {
         timestamp: new Date().toISOString(),
       });
 
-      // Generate QR code as buffer
       const qrBuffer = await QRCode.toBuffer(qrData, {
         color: {
           dark: '#000000',
@@ -39,8 +36,8 @@ export class QRCodeService {
         errorCorrectionLevel: 'H',
       });
 
-      // Upload to Cloudinary
-      const result = await new Promise((resolve, reject) => {
+      // Upload to Cloudinary with proper typing
+      const result = await new Promise<UploadApiResponse>((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
             public_id: `ticket-${ticketNumber}-${uuidv4()}`,
@@ -48,24 +45,25 @@ export class QRCodeService {
             format: 'png',
             resource_type: 'image',
           },
-          (error, result) => {
+          (error: UploadApiErrorResponse | undefined, result: UploadApiResponse | undefined) => {
             if (error) {
               logger.error(`❌ Cloudinary upload error: ${error.message}`);
               reject(error);
-            } else {
+            } else if (result) {
               resolve(result);
+            } else {
+              reject(new Error('Unknown Cloudinary upload error'));
             }
           }
         );
 
-        // Create readable stream from buffer and pipe to uploadStream
         const readableStream = new Readable();
         readableStream.push(qrBuffer);
         readableStream.push(null);
         readableStream.pipe(uploadStream);
       });
 
-      const qrCodeUrl = (result as any).secure_url;
+      const qrCodeUrl = result.secure_url;
       
       logger.info(`✅ QR code generated and uploaded to Cloudinary for ticket: ${ticketNumber}`);
       logger.info(`✅ QR code URL: ${qrCodeUrl}`);
@@ -84,7 +82,6 @@ export class QRCodeService {
     try {
       const qrData = typeof data === 'string' ? data : JSON.stringify(data);
       
-      // Generate QR code as buffer
       const qrBuffer = await QRCode.toBuffer(qrData, {
         color: {
           dark: '#000000',
@@ -94,8 +91,7 @@ export class QRCodeService {
         margin: 1,
       });
 
-      // Upload to Cloudinary
-      const result = await new Promise((resolve, reject) => {
+      const result = await new Promise<UploadApiResponse>((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
             public_id: `qr-${uuidv4()}`,
@@ -103,9 +99,10 @@ export class QRCodeService {
             format: 'png',
             resource_type: 'image',
           },
-          (error, result) => {
+          (error: UploadApiErrorResponse | undefined, result: UploadApiResponse | undefined) => {
             if (error) reject(error);
-            else resolve(result);
+            else if (result) resolve(result);
+            else reject(new Error('Unknown upload error'));
           }
         );
 
@@ -115,7 +112,7 @@ export class QRCodeService {
         readableStream.pipe(uploadStream);
       });
 
-      return (result as any).secure_url;
+      return result.secure_url;
     } catch (error: any) {
       logger.error(`❌ QR code generation error: ${error.message}`);
       throw error;
