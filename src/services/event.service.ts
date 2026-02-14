@@ -15,16 +15,16 @@ cloudinary.config({
 
 export class EventService {
   async createEvent(eventData: IEventInput, creatorId: string): Promise<IEvent> {
-    try {
-      // Convert price from Naira to kobo for storage
-      const event = new Event({
-        ...eventData,
-        ticketPrice: eventData.ticketPrice * 100, // Convert to kobo
-        creator: creatorId,
-        availableTickets: eventData.totalTickets,
-      });
+  try {
+    // Store price in kobo (multiply by 100)
+    const event = new Event({
+      ...eventData,
+      ticketPrice: eventData.ticketPrice * 100, // Convert to kobo
+      creator: creatorId,
+      availableTickets: eventData.totalTickets,
+    });
 
-      await event.save();
+    await event.save();
 
       // Update user's eventsCreated array
       await User.findByIdAndUpdate(
