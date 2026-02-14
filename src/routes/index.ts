@@ -5,6 +5,7 @@ import ticketRoutes from './ticket.routes';
 import paymentRoutes from './payment.routes';
 import analyticsRoutes from './analytics.routes';
 import notificationRoutes from './notification.routes';
+import newsletterRoutes from './newsletter.routes';
 
 const router = Router();
 
@@ -25,5 +26,6 @@ router.use('/tickets', ticketRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/newsletter', newsletterRoutes);
 
 export default router;
