@@ -25,9 +25,9 @@ export class PaystackService {
     try {
       const payload: any = {
         email,
-        amount: amount * 100,
+        amount, // 🔥 FIX: amount is already in kobo from ticket.service.ts
         metadata,
-        // 🚨 CALLBACK_URL COMPLETELY REMOVED - Paystack will use dashboard setting
+        // Paystack will use dashboard callback URL
       };
 
       if (reference) {
