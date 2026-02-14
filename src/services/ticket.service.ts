@@ -36,7 +36,7 @@ export class TicketService {
         throw new Error('User not found');
       }
 
-      const totalAmount = event.ticketPrice * quantity;
+      const totalAmount = event.ticketPrice;
 
       // 🔥 Generate a truly unique reference to avoid Paystack cache
       const uniqueReference = `EVT_${Date.now()}_${userId.substring(0,5)}_${Math.random().toString(36).substring(2, 8)}`;
