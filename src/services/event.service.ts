@@ -142,9 +142,8 @@ export class EventService {
 
       if (filter.priceMin !== undefined || filter.priceMax !== undefined) {
         query.ticketPrice = {};
-        // Convert from Naira to kobo for database query (prices stored as kobo)
-        if (filter.priceMin !== undefined) query.ticketPrice.$gte = filter.priceMin * 100;
-        if (filter.priceMax !== undefined) query.ticketPrice.$lte = filter.priceMax * 100;
+        if (filter.priceMin !== undefined) query.ticketPrice.$gte = filter.priceMin;
+        if (filter.priceMax !== undefined) query.ticketPrice.$lte = filter.priceMax;
       }
 
       if (filter.status) {
