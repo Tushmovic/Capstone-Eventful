@@ -117,7 +117,7 @@ export class PaystackService {
         `${PAYSTACK_BASE_URL}/transfer`,
         {
           source: 'balance',
-          amount: amount * 100,
+          amount: amount / 100,
           recipient: recipientCode,
           reason,
         },
