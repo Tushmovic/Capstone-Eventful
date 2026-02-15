@@ -128,7 +128,7 @@ export class TicketService {
       }
 
       const ticketNumber = qrCodeService.generateTicketNumber();
-      const pricePerTicketInNaira = paymentIntentData.totalAmount / paymentIntentData.quantity;
+      const pricePerTicketInNaira = Math.round((paymentIntentData.totalAmount / paymentIntentData.quantity) * 100);
       
       const ticket = await this.createTicket({
         eventId: paymentIntentData.eventId,
