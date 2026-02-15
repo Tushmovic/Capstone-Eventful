@@ -85,6 +85,12 @@ export class AuthController {
       return ApiResponse.success(res, updatedUser, 'Profile updated successfully');
     } catch (error: any) {
       logger.error(`Update profile controller error: ${error.message}`);
+      
+      // Handle specific error messages
+      if (error.message === 'No valid fields to update') {
+        return ApiResponse.badRequest(res, error.message);
+      }
+      
       return ApiResponse.error(res, 'Failed to update profile');
     }
   }
@@ -123,8 +129,6 @@ export class AuthController {
 
   async logout(req: Request, res: Response) {
     try {
-      // In production, we would invalidate the refresh token in Redis
-      // For now, just return success
       return ApiResponse.success(res, null, 'Logged out successfully');
     } catch (error: any) {
       logger.error(`Logout controller error: ${error.message}`);
@@ -132,7 +136,6 @@ export class AuthController {
     }
   }
 
-  // 🔥 NEW: Upload profile image
   async uploadProfileImage(req: Request, res: Response) {
     try {
       const userId = (req as any).user.userId;
@@ -142,7 +145,6 @@ export class AuthController {
         return ApiResponse.badRequest(res, 'No image uploaded');
       }
 
-      // Upload to Cloudinary
       const imageUrl = await authService.uploadProfileImage(userId, file);
       
       return ApiResponse.success(res, { profileImage: imageUrl }, 'Profile image uploaded successfully');

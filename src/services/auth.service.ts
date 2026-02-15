@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger';
 import { constants } from '../config/constants';
 import { uploadToCloudinary } from '../utils/cloudinary';
+import { accountService } from './account.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -21,6 +22,14 @@ export class AuthService {
 
       // Create new user
       const user = await User.create(userData);
+
+      // Initialize user's first account
+      await accountService.initializeUserAccounts(user._id.toString(), {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        profileImage: user.profileImage,
+      });
 
       // Generate tokens
       const { token, refreshToken } = this.generateTokens(user._id.toString(), user.role);
@@ -121,12 +130,54 @@ export class AuthService {
       const allowedUpdates = ['name', 'phoneNumber', 'bio', 'website', 'socialMedia', 'profileImage', 'notificationPreferences'];
       const updates: any = {};
       
-      // Filter only allowed updates
+      // Filter only allowed updates and sanitize empty strings
       Object.keys(updateData).forEach(key => {
         if (allowedUpdates.includes(key)) {
-          updates[key] = updateData[key];
+          // If the value is an empty string, set it to undefined (will be removed from DB)
+          if (updateData[key] === '') {
+            updates[key] = undefined;
+          } else {
+            updates[key] = updateData[key];
+          }
         }
       });
+
+      // Remove undefined values to avoid overwriting with null
+      Object.keys(updates).forEach(key => {
+        if (updates[key] === undefined) {
+          delete updates[key];
+        }
+      });
+
+      // Special handling for socialMedia object
+      if (updateData.socialMedia) {
+        const socialMediaUpdates: any = {};
+        Object.keys(updateData.socialMedia).forEach(platform => {
+          if (updateData.socialMedia[platform] === '') {
+            socialMediaUpdates[platform] = undefined;
+          } else {
+            socialMediaUpdates[platform] = updateData.socialMedia[platform];
+          }
+        });
+        
+        // Remove undefined values from socialMedia
+        Object.keys(socialMediaUpdates).forEach(key => {
+          if (socialMediaUpdates[key] === undefined) {
+            delete socialMediaUpdates[key];
+          }
+        });
+        
+        if (Object.keys(socialMediaUpdates).length > 0) {
+          updates.socialMedia = socialMediaUpdates;
+        } else {
+          updates.socialMedia = undefined;
+        }
+      }
+
+      // Only update if there are valid fields to update
+      if (Object.keys(updates).length === 0) {
+        throw new Error('No valid fields to update');
+      }
 
       const user = await User.findByIdAndUpdate(
         userId,
@@ -138,9 +189,10 @@ export class AuthService {
         throw new Error('User not found');
       }
 
+      logger.info(`✅ Profile updated for user: ${userId}`);
       return user;
     } catch (error: any) {
-      logger.error(`Update profile error: ${error.message}`);
+      logger.error(`❌ Update profile error: ${error.message}`);
       throw error;
     }
   }

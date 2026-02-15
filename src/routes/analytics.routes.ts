@@ -52,4 +52,25 @@ router.get('/event/:eventId', authenticated, creatorOnly, analyticsController.ge
  */
 router.get('/revenue', authenticated, creatorOnly, analyticsController.getRevenueAnalytics);
 
+/**
+ * @swagger
+ * /api/v1/analytics/attendee:
+ *   get:
+ *     summary: Get attendee analytics
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: range
+ *         schema:
+ *           type: string
+ *           enum: [1month, 3months, 6months, 1year, all]
+ *         default: 6months
+ *     responses:
+ *       200:
+ *         description: Attendee analytics retrieved successfully
+ */
+router.get('/attendee', authenticated, analyticsController.getAttendeeAnalytics); // 🔥 NEW ROUTE
+
 export default router;

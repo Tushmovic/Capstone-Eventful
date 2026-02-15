@@ -33,7 +33,7 @@ export class AnalyticsController {
           date: event.date,
           totalTickets: event.totalTickets,
           availableTickets: event.availableTickets,
-          ticketPrice: event.ticketPrice // Return as kobo; frontend converts
+          ticketPrice: event.ticketPrice
         },
         tickets: {
           total: totalTicketsSold,
@@ -172,6 +172,118 @@ export class AnalyticsController {
     } catch (error: any) {
       logger.error(`Get revenue analytics error: ${error.message}`);
       return ApiResponse.error(res, 'Failed to get revenue analytics');
+    }
+  }
+
+  // 🔥 NEW: Get attendee analytics
+  async getAttendeeAnalytics(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user.userId;
+      const { range = '6months' } = req.query;
+
+      // Get user's tickets
+      const tickets = await Ticket.find({ user: userId })
+        .populate('event')
+        .sort({ purchaseDate: -1 });
+
+      // Get user's payments
+      const payments = await Payment.find({ userId, status: 'successful' });
+
+      // Calculate stats
+      const totalTicketsPurchased = tickets.length;
+      const totalSpent = payments.reduce((sum, p) => sum + p.amount, 0);
+      
+      const activeTickets = tickets.filter((t: any) => 
+        t.status === 'confirmed' && new Date((t.event as any)?.date) > new Date()
+      ).length;
+      
+      const usedTickets = tickets.filter((t: any) => t.status === 'used').length;
+      const cancelledTickets = tickets.filter((t: any) => t.status === 'cancelled').length;
+      const expiredTickets = tickets.filter((t: any) => t.status === 'expired').length;
+
+      // Favorite categories
+      const categoryCount: Record<string, number> = {};
+      tickets.forEach((ticket: any) => {
+        const category = (ticket.event as any)?.category;
+        if (category) {
+          categoryCount[category] = (categoryCount[category] || 0) + 1;
+        }
+      });
+      
+      const favoriteCategories = Object.entries(categoryCount)
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      // Monthly spending (last 6 months)
+      const monthlySpending = [];
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthStr = month.toLocaleString('default', { month: 'short' });
+        
+        const monthPayments = payments.filter((p: any) => {
+          const pDate = new Date(p.createdAt);
+          return pDate.getMonth() === month.getMonth() && 
+                 pDate.getFullYear() === month.getFullYear();
+        });
+        
+        const amount = monthPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+        monthlySpending.push({ month: monthStr, amount });
+      }
+
+      // Upcoming events
+      const upcomingEvents = tickets
+        .filter((t: any) => 
+          t.status === 'confirmed' && 
+          new Date((t.event as any)?.date) > new Date()
+        )
+        .slice(0, 5)
+        .map((t: any) => ({
+          id: (t.event as any)._id,
+          title: (t.event as any).title,
+          date: (t.event as any).date,
+          venue: (t.event as any).location?.venue,
+          ticketNumber: t.ticketNumber
+        }));
+
+      // Recent activity
+      const recentActivity = [
+        ...payments.slice(0, 3).map((p: any) => ({
+          type: 'purchase',
+          description: `Purchased ticket for an event`,
+          date: p.createdAt,
+          amount: p.amount
+        })),
+        ...tickets.filter((t: any) => t.status === 'used').slice(0, 2).map((t: any) => ({
+          type: 'used',
+          description: `Attended ${(t.event as any).title}`,
+          date: t.usedAt || t.updatedAt,
+        })),
+        ...tickets.filter((t: any) => t.status === 'cancelled').slice(0, 2).map((t: any) => ({
+          type: 'refund',
+          description: `Refund for ${(t.event as any).title}`,
+          date: t.updatedAt,
+          amount: t.price
+        }))
+      ].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+       .slice(0, 5);
+
+      return ApiResponse.success(res, {
+        totalTicketsPurchased,
+        totalSpent,
+        activeTickets,
+        usedTickets,
+        cancelledTickets,
+        expiredTickets,
+        favoriteCategories,
+        monthlySpending,
+        upcomingEvents,
+        recentActivity
+      }, 'Attendee analytics retrieved successfully');
+    } catch (error: any) {
+      logger.error(`Get attendee analytics error: ${error.message}`);
+      return ApiResponse.error(res, 'Failed to get attendee analytics');
     }
   }
 }
