@@ -37,7 +37,8 @@ export class TicketService {
       }
 
       // Calculate total entirely in standard Naira
-      const totalAmountInNaira = event.ticketPrice * quantity; 
+      // Note: ticketPrice is stored as kobo, so divide by 100 to get Naira
+      const totalAmountInNaira = (event.ticketPrice / 100) * quantity; 
 
       // Generate a truly unique reference to avoid Paystack cache
       const uniqueReference = `EVT_${Date.now()}_${userId.substring(0,5)}_${Math.random().toString(36).substring(2, 8)}`;
@@ -53,7 +54,7 @@ export class TicketService {
           userId: user._id.toString(),
           userName: user.name,
           quantity,
-          ticketPrice: event.ticketPrice, // Original Naira price
+          ticketPrice: event.ticketPrice / 100, // Convert from kobo to Naira
           totalAmount: totalAmountInNaira, // Total Naira price
           uniqueReference,
           reference: uniqueReference,
