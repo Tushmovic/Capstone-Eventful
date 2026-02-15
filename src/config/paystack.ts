@@ -23,25 +23,28 @@ export class PaystackService {
     reference: string;
   }> {
     try {
-      // 🔥 CRITICAL FIX: Paystack test environment multiplies by 100
-      // So we need to send the amount in Naira (divide by 100)
+      // 🔥 FOOLPROOF FIX: Paystack test environment multiplies by 100
+      // Let's send the amount in Naira directly
       const amountInNaira = Math.round(amount / 100);
       
-      console.log('🔍 Paystack Debug:', {
-        receivedKobo: amount,
-        sendingNaira: amountInNaira,
-        expectedDisplay: `₦${amountInNaira}`
+      console.log('🔍 Paystack Debug - Payment Init:', {
+        receivedFromTicketService: amount,
+        inNaira: amountInNaira,
+        willBeMultipliedByPaystack: amountInNaira * 100,
+        finalDisplay: `₦${amountInNaira}`
       });
 
       const payload: any = {
         email,
-        amount: amountInNaira, // Send in Naira!
+        amount: amountInNaira, // Send in Naira
         metadata,
       };
 
       if (reference) {
         payload.reference = reference;
       }
+
+      console.log('🔍 Payload being sent:', payload);
 
       const response = await axios.post<IPaystackInitializeResponse>(
         `${PAYSTACK_BASE_URL}/transaction/initialize`,
@@ -114,7 +117,7 @@ export class PaystackService {
         `${PAYSTACK_BASE_URL}/transfer`,
         {
           source: 'balance',
-          amount: amount * 100, // For transfers, send in kobo
+          amount: amount * 100,
           recipient: recipientCode,
           reason,
         },
