@@ -36,23 +36,25 @@ export class TicketService {
         throw new Error('User not found');
       }
 
-      const totalAmountInKobo = event.ticketPrice * quantity;
-      const nairaTotal = (event.ticketPrice / 100) * quantity;
+      // Calculate total entirely in standard Naira
+      const totalAmountInNaira = event.ticketPrice * quantity; 
 
+      // Generate a truly unique reference to avoid Paystack cache
       const uniqueReference = `EVT_${Date.now()}_${userId.substring(0,5)}_${Math.random().toString(36).substring(2, 8)}`;
 
+      // Initialize payment with Paystack - passing standard Naira
+      // (Your updated paystack.ts will convert this to Kobo internally)
       const paymentData = await paystackService.initializeTransaction(
         user.email,
-        totalAmountInKobo,
+        totalAmountInNaira, 
         {
           eventId: event._id.toString(),
           eventTitle: event.title,
           userId: user._id.toString(),
           userName: user.name,
           quantity,
-          ticketPrice: event.ticketPrice,
-          totalAmount: totalAmountInKobo,
-          nairaTotal,
+          ticketPrice: event.ticketPrice, // Original Naira price
+          totalAmount: totalAmountInNaira, // Total Naira price
           uniqueReference,
           reference: uniqueReference,
         }
@@ -60,11 +62,12 @@ export class TicketService {
 
       const paystackReference = paymentData.reference;
 
+      // Store standard Naira amount in Redis
       const redisValue = JSON.stringify({
         eventId: event._id.toString(),
         userId: userId.toString(),
         quantity,
-        totalAmount: nairaTotal,
+        totalAmount: totalAmountInNaira, 
         status: 'pending',
         createdAt: new Date().toISOString(),
         uniqueReference,
@@ -72,12 +75,13 @@ export class TicketService {
 
       await redisClient.set(`payment:${paystackReference}`, redisValue);
       logger.info(`✅ Payment intent stored in Redis: ${paystackReference}`);
-      logger.info(`✅ Amount: ₦${nairaTotal} (${totalAmountInKobo} kobo) for ${quantity} ticket(s)`);
+      logger.info(`✅ Unique reference generated: ${uniqueReference}`);
+      logger.info(`✅ Amount: ₦${totalAmountInNaira} for ${quantity} ticket(s)`);
       
       return {
         paymentUrl: paymentData.authorization_url,
         reference: paystackReference,
-        amount: totalAmountInKobo,
+        amount: totalAmountInNaira, 
       };
     } catch (error: any) {
       logger.error(`❌ Ticket purchase error: ${error.message}`);
@@ -113,15 +117,23 @@ export class TicketService {
         throw new Error(`Payment verification failed: ${gatewayResponse || 'Unknown error'}`);
       }
 
-      const ticketNumber = qrCodeService.generateTicketNumber();
+      // 🔥 CRITICAL SECURITY CHECK: Verify the amount paid
+      // Paystack returns the paid amount in KOBO, so we divide by 100 to get Naira
+      const amountPaidInNaira = paymentData.amount / 100;
       
-      const pricePerTicket = Math.round((paymentIntentData.totalAmount / paymentIntentData.quantity) * 100);
+      // Compare against the standard Naira total saved in Redis
+      if (amountPaidInNaira !== paymentIntentData.totalAmount) {
+        throw new Error(`Amount mismatch security error. Expected ₦${paymentIntentData.totalAmount}, but Paystack charged ₦${amountPaidInNaira}.`);
+      }
+
+      const ticketNumber = qrCodeService.generateTicketNumber();
+      const pricePerTicketInNaira = paymentIntentData.totalAmount / paymentIntentData.quantity;
       
       const ticket = await this.createTicket({
         eventId: paymentIntentData.eventId,
         userId: paymentIntentData.userId,
         ticketNumber,
-        price: pricePerTicket,
+        price: pricePerTicketInNaira, // Store standard Naira in DB
         paymentReference: reference,
       });
 
@@ -155,7 +167,7 @@ export class TicketService {
         ticketNumber,
         event: eventId,
         user: userId,
-        price,
+        price, // Price stored as standard Naira
         qrCode: qrCodeUrl,
         paymentReference,
         paymentStatus: 'successful',
@@ -179,9 +191,8 @@ export class TicketService {
 
       await this.createPaymentRecord(ticket, paymentReference);
 
-      // Clear cache for this user's tickets
-      await redisClient.del(`user:${userId}:tickets`);
       await redisClient.del(`event:${eventId}`);
+      await redisClient.del(`user:${userId}:tickets`);
 
       this.sendTicketConfirmation(ticket).catch(err => 
         logger.error(`Failed to send email: ${err.message}`)
@@ -292,42 +303,20 @@ export class TicketService {
     try {
       const cacheKey = `user:${userId}:tickets`;
       
-      // Try to get from cache
-      try {
-        const cachedTickets = await redisClient.get(cacheKey);
-        if (cachedTickets) {
-          const parsed = JSON.parse(cachedTickets);
-          // Validate that parsed data is an array
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
-        }
-      } catch (cacheError) {
-        // If cache fails, just log and continue to database
-        logger.warn(`⚠️ Cache read failed for user ${userId}, falling back to database`);
+      const cachedTickets = await redisClient.get(cacheKey);
+      if (cachedTickets) {
+        return JSON.parse(cachedTickets);
       }
 
-      // Get from database
       const tickets = await Ticket.find({ user: userId })
-        .populate({
-          path: 'event',
-          select: 'title date location'
-        })
-        .sort({ purchaseDate: -1 })
-        .lean();
+        .populate('event')
+        .sort({ purchaseDate: -1 });
 
-      // Store in cache (but don't wait for it)
-      try {
-        await redisClient.set(cacheKey, JSON.stringify(tickets), 300); // Cache for 5 minutes
-      } catch (cacheError) {
-        logger.warn(`⚠️ Cache write failed for user ${userId}`);
-      }
-
-      return tickets as ITicket[];
+      await redisClient.set(cacheKey, JSON.stringify(tickets));
+      return tickets;
     } catch (error: any) {
       logger.error(`❌ Get user tickets error: ${error.message}`);
-      // Return empty array instead of throwing error
-      return [];
+      throw error;
     }
   }
 
@@ -335,35 +324,20 @@ export class TicketService {
     try {
       const cacheKey = `event:${eventId}:tickets`;
       
-      // Try cache first
-      try {
-        const cachedTickets = await redisClient.get(cacheKey);
-        if (cachedTickets) {
-          const parsed = JSON.parse(cachedTickets);
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
-        }
-      } catch (cacheError) {
-        logger.warn(`⚠️ Cache read failed for event ${eventId}`);
+      const cachedTickets = await redisClient.get(cacheKey);
+      if (cachedTickets) {
+        return JSON.parse(cachedTickets);
       }
 
       const tickets = await Ticket.find({ event: eventId })
         .populate('user', 'name email profileImage')
-        .sort({ purchaseDate: -1 })
-        .lean();
+        .sort({ purchaseDate: -1 });
 
-      // Store in cache
-      try {
-        await redisClient.set(cacheKey, JSON.stringify(tickets), 300);
-      } catch (cacheError) {
-        logger.warn(`⚠️ Cache write failed for event ${eventId}`);
-      }
-
-      return tickets as ITicket[];
+      await redisClient.set(cacheKey, JSON.stringify(tickets));
+      return tickets;
     } catch (error: any) {
       logger.error(`❌ Get event tickets error: ${error.message}`);
-      return [];
+      throw error;
     }
   }
 
@@ -397,9 +371,8 @@ export class TicketService {
         { new: true }
       );
 
-      // Clear caches
-      await redisClient.del(`user:${userId}:tickets`);
       await redisClient.del(`event:${ticket.event}:tickets`);
+      await redisClient.del(`user:${userId}:tickets`);
       await redisClient.del(`event:${ticket.event}`);
 
       logger.info(`✅ Ticket cancelled: ${ticketId} by user ${userId}`);

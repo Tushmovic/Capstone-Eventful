@@ -14,7 +14,7 @@ export class PaystackService {
 
   async initializeTransaction(
     email: string,
-    amount: number,
+    amountInNaira: number, // 👈 Explicitly accept standard Naira here
     metadata?: Record<string, any>,
     reference?: string
   ): Promise<{ 
@@ -23,28 +23,23 @@ export class PaystackService {
     reference: string;
   }> {
     try {
-      // 🔥 FOOLPROOF FIX: Paystack test environment multiplies by 100
-      // Let's send the amount in Naira directly
-      const amountInNaira = Math.round(amount / 100);
+      // 🔥 THE REAL FIX: Convert Naira to Kobo immediately before sending to Paystack
+      const amountInKobo = Math.round(amountInNaira * 100);
       
       console.log('🔍 Paystack Debug - Payment Init:', {
-        receivedFromTicketService: amount,
-        inNaira: amountInNaira,
-        willBeMultipliedByPaystack: amountInNaira * 100,
-        finalDisplay: `₦${amountInNaira}`
+        receivedNaira: amountInNaira,
+        convertedToKoboForPaystack: amountInKobo,
       });
 
       const payload: any = {
         email,
-        amount: amountInNaira, // Send in Naira
+        amount: amountInKobo, // 👈 Paystack demands Kobo here!
         metadata,
       };
 
       if (reference) {
         payload.reference = reference;
       }
-
-      console.log('🔍 Payload being sent:', payload);
 
       const response = await axios.post<IPaystackInitializeResponse>(
         `${PAYSTACK_BASE_URL}/transaction/initialize`,
