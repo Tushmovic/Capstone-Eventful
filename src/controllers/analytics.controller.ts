@@ -33,7 +33,7 @@ export class AnalyticsController {
           date: event.date,
           totalTickets: event.totalTickets,
           availableTickets: event.availableTickets,
-          ticketPrice: event.ticketPrice / 100 // Convert from kobo to Naira
+          ticketPrice: event.ticketPrice // Return as kobo; frontend converts
         },
         tickets: {
           total: totalTicketsSold,

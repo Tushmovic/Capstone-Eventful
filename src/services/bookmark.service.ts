@@ -96,7 +96,7 @@ export class BookmarkService {
           description: (bookmark.event as any)?.description || '',
           date: (bookmark.event as any)?.date || new Date(),
           location: (bookmark.event as any)?.location || { venue: '', city: '' },
-          ticketPrice: ((bookmark.event as any)?.ticketPrice || 0) / 100, // Convert from kobo to Naira
+          ticketPrice: (bookmark.event as any)?.ticketPrice || 0, // Return as kobo; frontend converts
           images: (bookmark.event as any)?.images || [],
           category: (bookmark.event as any)?.category || '',
         },

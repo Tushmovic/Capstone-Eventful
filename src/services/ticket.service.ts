@@ -54,7 +54,7 @@ export class TicketService {
           userId: user._id.toString(),
           userName: user.name,
           quantity,
-          ticketPrice: event.ticketPrice / 100, // Convert from kobo to Naira
+          ticketPrice: event.ticketPrice, // Stored as kobo
           totalAmount: totalAmountInNaira, // Total Naira price
           uniqueReference,
           reference: uniqueReference,
