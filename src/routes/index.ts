@@ -6,6 +6,7 @@ import paymentRoutes from './payment.routes';
 import analyticsRoutes from './analytics.routes';
 import notificationRoutes from './notification.routes';
 import newsletterRoutes from './newsletter.routes';
+import bookmarkRoutes from './bookmark.routes';
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use('/payments', paymentRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/newsletter', newsletterRoutes);
+router.use('/bookmarks', bookmarkRoutes);
 
 export default router;
